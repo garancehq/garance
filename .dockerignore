@@ -1,0 +1,20 @@
+# Dependencies and build artifacts
+node_modules/
+.next/
+dist/
+engine/target/
+*.log
+
+# Git and IDE
+.git/
+.idea/
+.vscode/
+
+# Docs (not needed in Docker images)
+docs/
+
+# Dev files
+.env
+.env.local
+.env*.local
+.DS_Store
