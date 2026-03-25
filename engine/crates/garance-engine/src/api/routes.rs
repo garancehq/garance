@@ -112,7 +112,17 @@ pub fn row_to_json(row: &tokio_postgres::Row) -> Value {
             Type::FLOAT8 => row.get::<_, Option<f64>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
             Type::UUID => row.get::<_, Option<uuid::Uuid>>(i).map(|v| Value::String(v.to_string())).unwrap_or(Value::Null),
             Type::JSON | Type::JSONB => row.get::<_, Option<serde_json::Value>>(i).unwrap_or(Value::Null),
-            _ => { row.get::<_, Option<&str>>(i).map(|v| Value::String(v.to_string())).unwrap_or(Value::Null) }
+            Type::TIMESTAMP => row.get::<_, Option<chrono::NaiveDateTime>>(i).map(|v| Value::String(v.format("%Y-%m-%dT%H:%M:%S").to_string())).unwrap_or(Value::Null),
+            Type::TIMESTAMPTZ => row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(i).map(|v| Value::String(v.to_rfc3339())).unwrap_or(Value::Null),
+            Type::DATE => row.get::<_, Option<chrono::NaiveDate>>(i).map(|v| Value::String(v.to_string())).unwrap_or(Value::Null),
+            Type::TEXT | Type::VARCHAR | Type::BPCHAR | Type::NAME => row.get::<_, Option<&str>>(i).map(|v| Value::String(v.to_string())).unwrap_or(Value::Null),
+            _ => {
+                // Last resort: try as string, if that fails return type name
+                match row.try_get::<_, Option<&str>>(i) {
+                    Ok(v) => v.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
+                    Err(_) => Value::String(format!("<{}>", col.type_().name())),
+                }
+            }
         };
         obj.insert(col.name().to_string(), value);
     }
