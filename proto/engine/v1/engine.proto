@@ -10,6 +10,12 @@ service EngineService {
   rpc InsertRow(InsertRowRequest) returns (InsertRowResponse);
   rpc UpdateRow(UpdateRowRequest) returns (UpdateRowResponse);
   rpc DeleteRow(DeleteRowRequest) returns (DeleteRowResponse);
+
+  // Meta endpoints
+  rpc ListTables(ListTablesRequest) returns (ListTablesResponse);
+  rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse);
+  rpc ExecuteSQL(ExecuteSQLRequest) returns (ExecuteSQLResponse);
+  rpc ReloadSchema(ReloadSchemaRequest) returns (ReloadSchemaResponse);
 }
 
 message ListRowsRequest {
@@ -80,4 +86,46 @@ message DeleteRowRequest {
 
 message DeleteRowResponse {
   bool found = 1;
+}
+
+// ─── Meta RPCs ──────────────────────────────────────────────────────────────
+
+message ListTablesRequest {}
+
+message TableSummary {
+  string name = 1;
+  int32 columns = 2;
+  repeated string primary_key = 3;
+  int64 row_count = 4; // approximate, from pg_stat
+}
+
+message ListTablesResponse {
+  repeated TableSummary tables = 1;
+}
+
+message GetSchemaRequest {
+  string table = 1; // empty = all tables
+}
+
+message GetSchemaResponse {
+  bytes schema_json = 1; // JSON-encoded Schema or Table
+}
+
+message ExecuteSQLRequest {
+  string sql = 1;
+  bool readwrite = 2;
+}
+
+message ExecuteSQLResponse {
+  repeated string columns = 1;
+  bytes rows_json = 2;
+  int64 row_count = 3;
+  int64 duration_ms = 4;
+}
+
+message ReloadSchemaRequest {}
+
+message ReloadSchemaResponse {
+  int32 tables = 1;
+  string reloaded_at = 2;
 }

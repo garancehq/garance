@@ -687,6 +687,450 @@ func (x *DeleteRowResponse) GetFound() bool {
 	return false
 }
 
+type ListTablesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTablesRequest) Reset() {
+	*x = ListTablesRequest{}
+	mi := &file_engine_v1_engine_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTablesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTablesRequest) ProtoMessage() {}
+
+func (x *ListTablesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTablesRequest.ProtoReflect.Descriptor instead.
+func (*ListTablesRequest) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{10}
+}
+
+type TableSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Columns       int32                  `protobuf:"varint,2,opt,name=columns,proto3" json:"columns,omitempty"`
+	PrimaryKey    []string               `protobuf:"bytes,3,rep,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
+	RowCount      int64                  `protobuf:"varint,4,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"` // approximate, from pg_stat
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TableSummary) Reset() {
+	*x = TableSummary{}
+	mi := &file_engine_v1_engine_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TableSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TableSummary) ProtoMessage() {}
+
+func (x *TableSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TableSummary.ProtoReflect.Descriptor instead.
+func (*TableSummary) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TableSummary) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TableSummary) GetColumns() int32 {
+	if x != nil {
+		return x.Columns
+	}
+	return 0
+}
+
+func (x *TableSummary) GetPrimaryKey() []string {
+	if x != nil {
+		return x.PrimaryKey
+	}
+	return nil
+}
+
+func (x *TableSummary) GetRowCount() int64 {
+	if x != nil {
+		return x.RowCount
+	}
+	return 0
+}
+
+type ListTablesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tables        []*TableSummary        `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTablesResponse) Reset() {
+	*x = ListTablesResponse{}
+	mi := &file_engine_v1_engine_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTablesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTablesResponse) ProtoMessage() {}
+
+func (x *ListTablesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTablesResponse.ProtoReflect.Descriptor instead.
+func (*ListTablesResponse) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ListTablesResponse) GetTables() []*TableSummary {
+	if x != nil {
+		return x.Tables
+	}
+	return nil
+}
+
+type GetSchemaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"` // empty = all tables
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSchemaRequest) Reset() {
+	*x = GetSchemaRequest{}
+	mi := &file_engine_v1_engine_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSchemaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSchemaRequest) ProtoMessage() {}
+
+func (x *GetSchemaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSchemaRequest.ProtoReflect.Descriptor instead.
+func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetSchemaRequest) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+type GetSchemaResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaJson    []byte                 `protobuf:"bytes,1,opt,name=schema_json,json=schemaJson,proto3" json:"schema_json,omitempty"` // JSON-encoded Schema or Table
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSchemaResponse) Reset() {
+	*x = GetSchemaResponse{}
+	mi := &file_engine_v1_engine_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSchemaResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSchemaResponse) ProtoMessage() {}
+
+func (x *GetSchemaResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSchemaResponse.ProtoReflect.Descriptor instead.
+func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetSchemaResponse) GetSchemaJson() []byte {
+	if x != nil {
+		return x.SchemaJson
+	}
+	return nil
+}
+
+type ExecuteSQLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sql           string                 `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	Readwrite     bool                   `protobuf:"varint,2,opt,name=readwrite,proto3" json:"readwrite,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteSQLRequest) Reset() {
+	*x = ExecuteSQLRequest{}
+	mi := &file_engine_v1_engine_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteSQLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteSQLRequest) ProtoMessage() {}
+
+func (x *ExecuteSQLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteSQLRequest.ProtoReflect.Descriptor instead.
+func (*ExecuteSQLRequest) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ExecuteSQLRequest) GetSql() string {
+	if x != nil {
+		return x.Sql
+	}
+	return ""
+}
+
+func (x *ExecuteSQLRequest) GetReadwrite() bool {
+	if x != nil {
+		return x.Readwrite
+	}
+	return false
+}
+
+type ExecuteSQLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Columns       []string               `protobuf:"bytes,1,rep,name=columns,proto3" json:"columns,omitempty"`
+	RowsJson      []byte                 `protobuf:"bytes,2,opt,name=rows_json,json=rowsJson,proto3" json:"rows_json,omitempty"`
+	RowCount      int64                  `protobuf:"varint,3,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
+	DurationMs    int64                  `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteSQLResponse) Reset() {
+	*x = ExecuteSQLResponse{}
+	mi := &file_engine_v1_engine_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteSQLResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteSQLResponse) ProtoMessage() {}
+
+func (x *ExecuteSQLResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteSQLResponse.ProtoReflect.Descriptor instead.
+func (*ExecuteSQLResponse) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ExecuteSQLResponse) GetColumns() []string {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *ExecuteSQLResponse) GetRowsJson() []byte {
+	if x != nil {
+		return x.RowsJson
+	}
+	return nil
+}
+
+func (x *ExecuteSQLResponse) GetRowCount() int64 {
+	if x != nil {
+		return x.RowCount
+	}
+	return 0
+}
+
+func (x *ExecuteSQLResponse) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+type ReloadSchemaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadSchemaRequest) Reset() {
+	*x = ReloadSchemaRequest{}
+	mi := &file_engine_v1_engine_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadSchemaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadSchemaRequest) ProtoMessage() {}
+
+func (x *ReloadSchemaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadSchemaRequest.ProtoReflect.Descriptor instead.
+func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{17}
+}
+
+type ReloadSchemaResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tables        int32                  `protobuf:"varint,1,opt,name=tables,proto3" json:"tables,omitempty"`
+	ReloadedAt    string                 `protobuf:"bytes,2,opt,name=reloaded_at,json=reloadedAt,proto3" json:"reloaded_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadSchemaResponse) Reset() {
+	*x = ReloadSchemaResponse{}
+	mi := &file_engine_v1_engine_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadSchemaResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadSchemaResponse) ProtoMessage() {}
+
+func (x *ReloadSchemaResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_v1_engine_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadSchemaResponse.ProtoReflect.Descriptor instead.
+func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
+	return file_engine_v1_engine_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ReloadSchemaResponse) GetTables() int32 {
+	if x != nil {
+		return x.Tables
+	}
+	return 0
+}
+
+func (x *ReloadSchemaResponse) GetReloadedAt() string {
+	if x != nil {
+		return x.ReloadedAt
+	}
+	return ""
+}
+
 var File_engine_v1_engine_proto protoreflect.FileDescriptor
 
 const file_engine_v1_engine_proto_rawDesc = "" +
@@ -752,13 +1196,47 @@ const file_engine_v1_engine_proto_rawDesc = "" +
 	"project_id\x18\v \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04role\x18\f \x01(\tR\x04role\")\n" +
 	"\x11DeleteRowResponse\x12\x14\n" +
-	"\x05found\x18\x01 \x01(\bR\x05found2\xeb\x02\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\"\x13\n" +
+	"\x11ListTablesRequest\"z\n" +
+	"\fTableSummary\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acolumns\x18\x02 \x01(\x05R\acolumns\x12\x1f\n" +
+	"\vprimary_key\x18\x03 \x03(\tR\n" +
+	"primaryKey\x12\x1b\n" +
+	"\trow_count\x18\x04 \x01(\x03R\browCount\"E\n" +
+	"\x12ListTablesResponse\x12/\n" +
+	"\x06tables\x18\x01 \x03(\v2\x17.engine.v1.TableSummaryR\x06tables\"(\n" +
+	"\x10GetSchemaRequest\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\"4\n" +
+	"\x11GetSchemaResponse\x12\x1f\n" +
+	"\vschema_json\x18\x01 \x01(\fR\n" +
+	"schemaJson\"C\n" +
+	"\x11ExecuteSQLRequest\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\tR\x03sql\x12\x1c\n" +
+	"\treadwrite\x18\x02 \x01(\bR\treadwrite\"\x89\x01\n" +
+	"\x12ExecuteSQLResponse\x12\x18\n" +
+	"\acolumns\x18\x01 \x03(\tR\acolumns\x12\x1b\n" +
+	"\trows_json\x18\x02 \x01(\fR\browsJson\x12\x1b\n" +
+	"\trow_count\x18\x03 \x01(\x03R\browCount\x12\x1f\n" +
+	"\vduration_ms\x18\x04 \x01(\x03R\n" +
+	"durationMs\"\x15\n" +
+	"\x13ReloadSchemaRequest\"O\n" +
+	"\x14ReloadSchemaResponse\x12\x16\n" +
+	"\x06tables\x18\x01 \x01(\x05R\x06tables\x12\x1f\n" +
+	"\vreloaded_at\x18\x02 \x01(\tR\n" +
+	"reloadedAt2\x9a\x05\n" +
 	"\rEngineService\x12C\n" +
 	"\bListRows\x12\x1a.engine.v1.ListRowsRequest\x1a\x1b.engine.v1.ListRowsResponse\x12=\n" +
 	"\x06GetRow\x12\x18.engine.v1.GetRowRequest\x1a\x19.engine.v1.GetRowResponse\x12F\n" +
 	"\tInsertRow\x12\x1b.engine.v1.InsertRowRequest\x1a\x1c.engine.v1.InsertRowResponse\x12F\n" +
 	"\tUpdateRow\x12\x1b.engine.v1.UpdateRowRequest\x1a\x1c.engine.v1.UpdateRowResponse\x12F\n" +
-	"\tDeleteRow\x12\x1b.engine.v1.DeleteRowRequest\x1a\x1c.engine.v1.DeleteRowResponseB\x98\x01\n" +
+	"\tDeleteRow\x12\x1b.engine.v1.DeleteRowRequest\x1a\x1c.engine.v1.DeleteRowResponse\x12I\n" +
+	"\n" +
+	"ListTables\x12\x1c.engine.v1.ListTablesRequest\x1a\x1d.engine.v1.ListTablesResponse\x12F\n" +
+	"\tGetSchema\x12\x1b.engine.v1.GetSchemaRequest\x1a\x1c.engine.v1.GetSchemaResponse\x12I\n" +
+	"\n" +
+	"ExecuteSQL\x12\x1c.engine.v1.ExecuteSQLRequest\x1a\x1d.engine.v1.ExecuteSQLResponse\x12O\n" +
+	"\fReloadSchema\x12\x1e.engine.v1.ReloadSchemaRequest\x1a\x1f.engine.v1.ReloadSchemaResponseB\x98\x01\n" +
 	"\rcom.engine.v1B\vEngineProtoP\x01Z5github.com/garancehq/garance/proto/engine/v1;enginev1\xa2\x02\x03EXX\xaa\x02\tEngine.V1\xca\x02\tEngine\\V1\xe2\x02\x15Engine\\V1\\GPBMetadata\xea\x02\n" +
 	"Engine::V1b\x06proto3"
 
@@ -774,37 +1252,55 @@ func file_engine_v1_engine_proto_rawDescGZIP() []byte {
 	return file_engine_v1_engine_proto_rawDescData
 }
 
-var file_engine_v1_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_engine_v1_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_engine_v1_engine_proto_goTypes = []any{
-	(*ListRowsRequest)(nil),   // 0: engine.v1.ListRowsRequest
-	(*ListRowsResponse)(nil),  // 1: engine.v1.ListRowsResponse
-	(*GetRowRequest)(nil),     // 2: engine.v1.GetRowRequest
-	(*GetRowResponse)(nil),    // 3: engine.v1.GetRowResponse
-	(*InsertRowRequest)(nil),  // 4: engine.v1.InsertRowRequest
-	(*InsertRowResponse)(nil), // 5: engine.v1.InsertRowResponse
-	(*UpdateRowRequest)(nil),  // 6: engine.v1.UpdateRowRequest
-	(*UpdateRowResponse)(nil), // 7: engine.v1.UpdateRowResponse
-	(*DeleteRowRequest)(nil),  // 8: engine.v1.DeleteRowRequest
-	(*DeleteRowResponse)(nil), // 9: engine.v1.DeleteRowResponse
-	nil,                       // 10: engine.v1.ListRowsRequest.FiltersEntry
+	(*ListRowsRequest)(nil),      // 0: engine.v1.ListRowsRequest
+	(*ListRowsResponse)(nil),     // 1: engine.v1.ListRowsResponse
+	(*GetRowRequest)(nil),        // 2: engine.v1.GetRowRequest
+	(*GetRowResponse)(nil),       // 3: engine.v1.GetRowResponse
+	(*InsertRowRequest)(nil),     // 4: engine.v1.InsertRowRequest
+	(*InsertRowResponse)(nil),    // 5: engine.v1.InsertRowResponse
+	(*UpdateRowRequest)(nil),     // 6: engine.v1.UpdateRowRequest
+	(*UpdateRowResponse)(nil),    // 7: engine.v1.UpdateRowResponse
+	(*DeleteRowRequest)(nil),     // 8: engine.v1.DeleteRowRequest
+	(*DeleteRowResponse)(nil),    // 9: engine.v1.DeleteRowResponse
+	(*ListTablesRequest)(nil),    // 10: engine.v1.ListTablesRequest
+	(*TableSummary)(nil),         // 11: engine.v1.TableSummary
+	(*ListTablesResponse)(nil),   // 12: engine.v1.ListTablesResponse
+	(*GetSchemaRequest)(nil),     // 13: engine.v1.GetSchemaRequest
+	(*GetSchemaResponse)(nil),    // 14: engine.v1.GetSchemaResponse
+	(*ExecuteSQLRequest)(nil),    // 15: engine.v1.ExecuteSQLRequest
+	(*ExecuteSQLResponse)(nil),   // 16: engine.v1.ExecuteSQLResponse
+	(*ReloadSchemaRequest)(nil),  // 17: engine.v1.ReloadSchemaRequest
+	(*ReloadSchemaResponse)(nil), // 18: engine.v1.ReloadSchemaResponse
+	nil,                          // 19: engine.v1.ListRowsRequest.FiltersEntry
 }
 var file_engine_v1_engine_proto_depIdxs = []int32{
-	10, // 0: engine.v1.ListRowsRequest.filters:type_name -> engine.v1.ListRowsRequest.FiltersEntry
-	0,  // 1: engine.v1.EngineService.ListRows:input_type -> engine.v1.ListRowsRequest
-	2,  // 2: engine.v1.EngineService.GetRow:input_type -> engine.v1.GetRowRequest
-	4,  // 3: engine.v1.EngineService.InsertRow:input_type -> engine.v1.InsertRowRequest
-	6,  // 4: engine.v1.EngineService.UpdateRow:input_type -> engine.v1.UpdateRowRequest
-	8,  // 5: engine.v1.EngineService.DeleteRow:input_type -> engine.v1.DeleteRowRequest
-	1,  // 6: engine.v1.EngineService.ListRows:output_type -> engine.v1.ListRowsResponse
-	3,  // 7: engine.v1.EngineService.GetRow:output_type -> engine.v1.GetRowResponse
-	5,  // 8: engine.v1.EngineService.InsertRow:output_type -> engine.v1.InsertRowResponse
-	7,  // 9: engine.v1.EngineService.UpdateRow:output_type -> engine.v1.UpdateRowResponse
-	9,  // 10: engine.v1.EngineService.DeleteRow:output_type -> engine.v1.DeleteRowResponse
-	6,  // [6:11] is the sub-list for method output_type
-	1,  // [1:6] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	19, // 0: engine.v1.ListRowsRequest.filters:type_name -> engine.v1.ListRowsRequest.FiltersEntry
+	11, // 1: engine.v1.ListTablesResponse.tables:type_name -> engine.v1.TableSummary
+	0,  // 2: engine.v1.EngineService.ListRows:input_type -> engine.v1.ListRowsRequest
+	2,  // 3: engine.v1.EngineService.GetRow:input_type -> engine.v1.GetRowRequest
+	4,  // 4: engine.v1.EngineService.InsertRow:input_type -> engine.v1.InsertRowRequest
+	6,  // 5: engine.v1.EngineService.UpdateRow:input_type -> engine.v1.UpdateRowRequest
+	8,  // 6: engine.v1.EngineService.DeleteRow:input_type -> engine.v1.DeleteRowRequest
+	10, // 7: engine.v1.EngineService.ListTables:input_type -> engine.v1.ListTablesRequest
+	13, // 8: engine.v1.EngineService.GetSchema:input_type -> engine.v1.GetSchemaRequest
+	15, // 9: engine.v1.EngineService.ExecuteSQL:input_type -> engine.v1.ExecuteSQLRequest
+	17, // 10: engine.v1.EngineService.ReloadSchema:input_type -> engine.v1.ReloadSchemaRequest
+	1,  // 11: engine.v1.EngineService.ListRows:output_type -> engine.v1.ListRowsResponse
+	3,  // 12: engine.v1.EngineService.GetRow:output_type -> engine.v1.GetRowResponse
+	5,  // 13: engine.v1.EngineService.InsertRow:output_type -> engine.v1.InsertRowResponse
+	7,  // 14: engine.v1.EngineService.UpdateRow:output_type -> engine.v1.UpdateRowResponse
+	9,  // 15: engine.v1.EngineService.DeleteRow:output_type -> engine.v1.DeleteRowResponse
+	12, // 16: engine.v1.EngineService.ListTables:output_type -> engine.v1.ListTablesResponse
+	14, // 17: engine.v1.EngineService.GetSchema:output_type -> engine.v1.GetSchemaResponse
+	16, // 18: engine.v1.EngineService.ExecuteSQL:output_type -> engine.v1.ExecuteSQLResponse
+	18, // 19: engine.v1.EngineService.ReloadSchema:output_type -> engine.v1.ReloadSchemaResponse
+	11, // [11:20] is the sub-list for method output_type
+	2,  // [2:11] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_engine_v1_engine_proto_init() }
@@ -818,7 +1314,7 @@ func file_engine_v1_engine_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_engine_v1_engine_proto_rawDesc), len(file_engine_v1_engine_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

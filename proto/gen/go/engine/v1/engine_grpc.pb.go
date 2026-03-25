@@ -19,11 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	EngineService_ListRows_FullMethodName  = "/engine.v1.EngineService/ListRows"
-	EngineService_GetRow_FullMethodName    = "/engine.v1.EngineService/GetRow"
-	EngineService_InsertRow_FullMethodName = "/engine.v1.EngineService/InsertRow"
-	EngineService_UpdateRow_FullMethodName = "/engine.v1.EngineService/UpdateRow"
-	EngineService_DeleteRow_FullMethodName = "/engine.v1.EngineService/DeleteRow"
+	EngineService_ListRows_FullMethodName     = "/engine.v1.EngineService/ListRows"
+	EngineService_GetRow_FullMethodName       = "/engine.v1.EngineService/GetRow"
+	EngineService_InsertRow_FullMethodName    = "/engine.v1.EngineService/InsertRow"
+	EngineService_UpdateRow_FullMethodName    = "/engine.v1.EngineService/UpdateRow"
+	EngineService_DeleteRow_FullMethodName    = "/engine.v1.EngineService/DeleteRow"
+	EngineService_ListTables_FullMethodName   = "/engine.v1.EngineService/ListTables"
+	EngineService_GetSchema_FullMethodName    = "/engine.v1.EngineService/GetSchema"
+	EngineService_ExecuteSQL_FullMethodName   = "/engine.v1.EngineService/ExecuteSQL"
+	EngineService_ReloadSchema_FullMethodName = "/engine.v1.EngineService/ReloadSchema"
 )
 
 // EngineServiceClient is the client API for EngineService service.
@@ -35,6 +39,11 @@ type EngineServiceClient interface {
 	InsertRow(ctx context.Context, in *InsertRowRequest, opts ...grpc.CallOption) (*InsertRowResponse, error)
 	UpdateRow(ctx context.Context, in *UpdateRowRequest, opts ...grpc.CallOption) (*UpdateRowResponse, error)
 	DeleteRow(ctx context.Context, in *DeleteRowRequest, opts ...grpc.CallOption) (*DeleteRowResponse, error)
+	// Meta endpoints
+	ListTables(ctx context.Context, in *ListTablesRequest, opts ...grpc.CallOption) (*ListTablesResponse, error)
+	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
+	ExecuteSQL(ctx context.Context, in *ExecuteSQLRequest, opts ...grpc.CallOption) (*ExecuteSQLResponse, error)
+	ReloadSchema(ctx context.Context, in *ReloadSchemaRequest, opts ...grpc.CallOption) (*ReloadSchemaResponse, error)
 }
 
 type engineServiceClient struct {
@@ -95,6 +104,46 @@ func (c *engineServiceClient) DeleteRow(ctx context.Context, in *DeleteRowReques
 	return out, nil
 }
 
+func (c *engineServiceClient) ListTables(ctx context.Context, in *ListTablesRequest, opts ...grpc.CallOption) (*ListTablesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTablesResponse)
+	err := c.cc.Invoke(ctx, EngineService_ListTables_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSchemaResponse)
+	err := c.cc.Invoke(ctx, EngineService_GetSchema_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) ExecuteSQL(ctx context.Context, in *ExecuteSQLRequest, opts ...grpc.CallOption) (*ExecuteSQLResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteSQLResponse)
+	err := c.cc.Invoke(ctx, EngineService_ExecuteSQL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) ReloadSchema(ctx context.Context, in *ReloadSchemaRequest, opts ...grpc.CallOption) (*ReloadSchemaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReloadSchemaResponse)
+	err := c.cc.Invoke(ctx, EngineService_ReloadSchema_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EngineServiceServer is the server API for EngineService service.
 // All implementations must embed UnimplementedEngineServiceServer
 // for forward compatibility.
@@ -104,6 +153,11 @@ type EngineServiceServer interface {
 	InsertRow(context.Context, *InsertRowRequest) (*InsertRowResponse, error)
 	UpdateRow(context.Context, *UpdateRowRequest) (*UpdateRowResponse, error)
 	DeleteRow(context.Context, *DeleteRowRequest) (*DeleteRowResponse, error)
+	// Meta endpoints
+	ListTables(context.Context, *ListTablesRequest) (*ListTablesResponse, error)
+	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
+	ExecuteSQL(context.Context, *ExecuteSQLRequest) (*ExecuteSQLResponse, error)
+	ReloadSchema(context.Context, *ReloadSchemaRequest) (*ReloadSchemaResponse, error)
 	mustEmbedUnimplementedEngineServiceServer()
 }
 
@@ -128,6 +182,18 @@ func (UnimplementedEngineServiceServer) UpdateRow(context.Context, *UpdateRowReq
 }
 func (UnimplementedEngineServiceServer) DeleteRow(context.Context, *DeleteRowRequest) (*DeleteRowResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRow not implemented")
+}
+func (UnimplementedEngineServiceServer) ListTables(context.Context, *ListTablesRequest) (*ListTablesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTables not implemented")
+}
+func (UnimplementedEngineServiceServer) GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSchema not implemented")
+}
+func (UnimplementedEngineServiceServer) ExecuteSQL(context.Context, *ExecuteSQLRequest) (*ExecuteSQLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteSQL not implemented")
+}
+func (UnimplementedEngineServiceServer) ReloadSchema(context.Context, *ReloadSchemaRequest) (*ReloadSchemaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReloadSchema not implemented")
 }
 func (UnimplementedEngineServiceServer) mustEmbedUnimplementedEngineServiceServer() {}
 func (UnimplementedEngineServiceServer) testEmbeddedByValue()                       {}
@@ -240,6 +306,78 @@ func _EngineService_DeleteRow_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EngineService_ListTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).ListTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_ListTables_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).ListTables(ctx, req.(*ListTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).GetSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_GetSchema_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).GetSchema(ctx, req.(*GetSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_ExecuteSQL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteSQLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).ExecuteSQL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_ExecuteSQL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).ExecuteSQL(ctx, req.(*ExecuteSQLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).ReloadSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_ReloadSchema_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).ReloadSchema(ctx, req.(*ReloadSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EngineService_ServiceDesc is the grpc.ServiceDesc for EngineService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -266,6 +404,22 @@ var EngineService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRow",
 			Handler:    _EngineService_DeleteRow_Handler,
+		},
+		{
+			MethodName: "ListTables",
+			Handler:    _EngineService_ListTables_Handler,
+		},
+		{
+			MethodName: "GetSchema",
+			Handler:    _EngineService_GetSchema_Handler,
+		},
+		{
+			MethodName: "ExecuteSQL",
+			Handler:    _EngineService_ExecuteSQL_Handler,
+		},
+		{
+			MethodName: "ReloadSchema",
+			Handler:    _EngineService_ReloadSchema_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
