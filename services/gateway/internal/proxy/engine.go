@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,13 @@ func NewEngineProxy(addr string) (*EngineProxy, error) {
 }
 
 func (p *EngineProxy) RegisterRoutes(mux *http.ServeMux) {
+	// Meta endpoints (literal paths take priority over {table} in Go 1.22+)
+	mux.HandleFunc("GET /api/v1/_tables", p.ListTables)
+	mux.HandleFunc("GET /api/v1/_schema", p.GetSchema)
+	mux.HandleFunc("GET /api/v1/_schema/{table}", p.GetSchemaTable)
+	mux.HandleFunc("POST /api/v1/_reload", p.ReloadSchema)
+	mux.HandleFunc("POST /api/v1/rpc/query", p.ExecuteSQL)
+	// CRUD
 	mux.HandleFunc("GET /api/v1/{table}", p.ListRows)
 	mux.HandleFunc("POST /api/v1/{table}", p.InsertRow)
 	mux.HandleFunc("GET /api/v1/{table}/{id}", p.GetRow)
@@ -180,4 +188,82 @@ func (p *EngineProxy) DeleteRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+// ─── Meta Endpoints ──────────────────────────────────────────────────────
+
+func (p *EngineProxy) ListTables(w http.ResponseWriter, r *http.Request) {
+	resp, err := p.client.ListTables(r.Context(), &enginev1.ListTablesRequest{})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+	handler.WriteJSON(w, 200, resp.Tables)
+}
+
+func (p *EngineProxy) GetSchema(w http.ResponseWriter, r *http.Request) {
+	resp, err := p.client.GetSchema(r.Context(), &enginev1.GetSchemaRequest{})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+	handler.WriteRawJSON(w, 200, resp.SchemaJson)
+}
+
+func (p *EngineProxy) GetSchemaTable(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("table")
+	resp, err := p.client.GetSchema(r.Context(), &enginev1.GetSchemaRequest{Table: tableName})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+	handler.WriteRawJSON(w, 200, resp.SchemaJson)
+}
+
+func (p *EngineProxy) ReloadSchema(w http.ResponseWriter, r *http.Request) {
+	resp, err := p.client.ReloadSchema(r.Context(), &enginev1.ReloadSchemaRequest{})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+	handler.WriteJSON(w, 200, resp)
+}
+
+func (p *EngineProxy) ExecuteSQL(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		handler.WriteError(w, "VALIDATION_ERROR", "failed to read body", 400)
+		return
+	}
+
+	var sqlReq struct {
+		SQL string `json:"sql"`
+	}
+	if err := json.Unmarshal(body, &sqlReq); err != nil {
+		handler.WriteError(w, "VALIDATION_ERROR", "invalid request body", 400)
+		return
+	}
+
+	readwrite := false
+	if mode := r.Header.Get("X-Garance-SQL-Mode"); mode == "readwrite" {
+		readwrite = true
+	}
+
+	resp, err := p.client.ExecuteSQL(r.Context(), &enginev1.ExecuteSQLRequest{
+		Sql:       sqlReq.SQL,
+		Readwrite: readwrite,
+	})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+
+	// Build response matching the Engine HTTP format
+	result := map[string]interface{}{
+		"columns":     resp.Columns,
+		"rows":        json.RawMessage(resp.RowsJson),
+		"row_count":   resp.RowCount,
+		"duration_ms": resp.DurationMs,
+	}
+	handler.WriteJSON(w, 200, result)
 }
