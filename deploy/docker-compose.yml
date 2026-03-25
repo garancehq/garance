@@ -5,6 +5,8 @@
 #   # Edit .env with your values
 #   docker compose up -d
 
+name: garance
+
 services:
   postgres:
     image: postgres:17-alpine

@@ -1,6 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS garance_storage;
 
-CREATE TABLE garance_storage.buckets (
+CREATE TABLE IF NOT EXISTS garance_storage.buckets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT UNIQUE NOT NULL,
     is_public BOOLEAN NOT NULL DEFAULT FALSE,
@@ -10,7 +10,7 @@ CREATE TABLE garance_storage.buckets (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE garance_storage.files (
+CREATE TABLE IF NOT EXISTS garance_storage.files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bucket_id UUID NOT NULL REFERENCES garance_storage.buckets(id) ON DELETE CASCADE,
     name TEXT NOT NULL, -- full path within bucket, e.g. "user-123/photo.jpg"
@@ -23,5 +23,5 @@ CREATE TABLE garance_storage.files (
     UNIQUE (bucket_id, name)
 );
 
-CREATE INDEX idx_files_bucket_id ON garance_storage.files(bucket_id);
-CREATE INDEX idx_files_owner_id ON garance_storage.files(owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_bucket_id ON garance_storage.files(bucket_id);
+CREATE INDEX IF NOT EXISTS idx_files_owner_id ON garance_storage.files(owner_id);

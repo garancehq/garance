@@ -32,7 +32,7 @@ func (h *StorageHandler) RegisterRoutes(mux *http.ServeMux) {
 	// File operations
 	mux.HandleFunc("POST /storage/v1/{bucket}/upload", h.requireAuth(h.Upload))
 	mux.HandleFunc("GET /storage/v1/{bucket}/{path...}", h.optionalAuth(h.Download))
-	mux.HandleFunc("DELETE /storage/v1/{bucket}/{path...}/delete", h.requireAuth(h.DeleteFile))
+	mux.HandleFunc("DELETE /storage/v1/{bucket}/{path...}", h.requireAuth(h.DeleteFile))
 
 	// Signed URLs
 	mux.HandleFunc("POST /storage/v1/{bucket}/signed-url", h.requireAuth(h.CreateSignedURL))
