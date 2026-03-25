@@ -1,0 +1,116 @@
+# deploy/docker-compose.dev.yml
+# Garance BaaS — Local development (builds from source)
+# Usage: docker compose -f docker-compose.dev.yml up --build
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: garance
+    volumes:
+      - garance_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - garance_dev_storage:/data
+
+  engine:
+    build:
+      context: ../engine
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/garance
+      LISTEN_ADDR: 0.0.0.0:4000
+      GRPC_ADDR: 0.0.0.0:5000
+
+  auth:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/garance
+      LISTEN_ADDR: 0.0.0.0:4001
+      GRPC_ADDR: 0.0.0.0:5001
+      JWT_SECRET: dev-secret-change-me
+
+  storage:
+    build:
+      context: ../services/storage
+      dockerfile: Dockerfile
+    ports:
+      - "4002:4002"
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/garance
+      LISTEN_ADDR: 0.0.0.0:4002
+      GRPC_ADDR: 0.0.0.0:5002
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      JWT_SECRET: dev-secret-change-me
+
+  gateway:
+    build:
+      context: ../services/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - engine
+      - auth
+      - storage
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8080
+      ENGINE_GRPC_ADDR: engine:5000
+      AUTH_GRPC_ADDR: auth:5001
+      STORAGE_GRPC_ADDR: storage:5002
+      JWT_SECRET: dev-secret-change-me
+      ALLOWED_ORIGINS: "*"
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+
+volumes:
+  garance_dev_data:
+  garance_dev_storage:
