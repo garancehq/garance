@@ -31,7 +31,23 @@ async fn main() {
         schema: Arc::new(RwLock::new(db_schema)),
     };
 
-    let app = api::router(state);
+    let app = api::router(state.clone());
+
+    // gRPC server
+    let grpc_addr = std::env::var("GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:5000".into());
+    let grpc_service = garance_engine::grpc::server::EngineGrpcService::new(
+        state.pool.clone(),
+        state.schema.clone(),
+    );
+    let grpc_listener = grpc_addr.parse().unwrap();
+    tokio::spawn(async move {
+        info!(%grpc_addr, "garance engine gRPC started");
+        tonic::transport::Server::builder()
+            .add_service(grpc_service.into_service())
+            .serve(grpc_listener)
+            .await
+            .unwrap();
+    });
 
     let addr = std::env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:4000".into());
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

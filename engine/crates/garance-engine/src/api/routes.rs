@@ -99,7 +99,7 @@ pub async fn delete_row(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn row_to_json(row: &tokio_postgres::Row) -> Value {
+pub fn row_to_json(row: &tokio_postgres::Row) -> Value {
     use tokio_postgres::types::Type;
     let mut obj = Map::new();
     for (i, col) in row.columns().iter().enumerate() {
