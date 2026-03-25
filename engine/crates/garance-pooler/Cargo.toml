@@ -1,0 +1,17 @@
+[package]
+name = "garance-pooler"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio-postgres.workspace = true
+deadpool-postgres.workspace = true
+tokio.workspace = true
+serde.workspace = true
+url.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }

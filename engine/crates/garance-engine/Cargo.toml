@@ -1,0 +1,23 @@
+[package]
+name = "garance-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+garance-pooler = { path = "../garance-pooler" }
+garance-codegen = { path = "../garance-codegen" }
+tokio-postgres.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+axum.workspace = true
+
+[dev-dependencies]
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+axum-test = "17"
