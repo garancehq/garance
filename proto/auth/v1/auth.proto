@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/garancehq/garance/proto/auth/v1;authv1";
+
+service AuthService {
+  rpc SignUp(SignUpRequest) returns (AuthResponse);
+  rpc SignIn(SignInRequest) returns (AuthResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (AuthResponse);
+  rpc SignOut(SignOutRequest) returns (SignOutResponse);
+  rpc GetUser(GetUserRequest) returns (UserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+}
+
+message SignUpRequest {
+  string email = 1;
+  string password = 2;
+  string user_agent = 3;
+  string ip_address = 4;
+}
+
+message SignInRequest {
+  string email = 1;
+  string password = 2;
+  string user_agent = 3;
+  string ip_address = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+  string user_agent = 2;
+  string ip_address = 3;
+}
+
+message SignOutRequest {
+  string refresh_token = 1;
+}
+
+message SignOutResponse {}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message DeleteUserResponse {}
+
+message AuthResponse {
+  UserResponse user = 1;
+  TokenPair token_pair = 2;
+}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;
+  string token_type = 4;
+}
+
+message UserResponse {
+  string id = 1;
+  string email = 2;
+  bool email_verified = 3;
+  string role = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}

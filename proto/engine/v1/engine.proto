@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package engine.v1;
+
+option go_package = "github.com/garancehq/garance/proto/engine/v1;enginev1";
+
+service EngineService {
+  rpc ListRows(ListRowsRequest) returns (ListRowsResponse);
+  rpc GetRow(GetRowRequest) returns (GetRowResponse);
+  rpc InsertRow(InsertRowRequest) returns (InsertRowResponse);
+  rpc UpdateRow(UpdateRowRequest) returns (UpdateRowResponse);
+  rpc DeleteRow(DeleteRowRequest) returns (DeleteRowResponse);
+}
+
+message ListRowsRequest {
+  string table = 1;
+  map<string, string> filters = 2; // key=column, value="operator.value"
+  string select = 3;               // comma-separated columns
+  string order = 4;                // e.g. "name.asc,age.desc"
+  int64 limit = 5;
+  int64 offset = 6;
+  // Auth context (injected by Gateway from JWT)
+  string user_id = 10;
+  string project_id = 11;
+  string role = 12;
+}
+
+message ListRowsResponse {
+  // JSON-encoded array of rows
+  bytes rows_json = 1;
+  int64 count = 2;
+}
+
+message GetRowRequest {
+  string table = 1;
+  string id = 2;
+  string user_id = 10;
+  string project_id = 11;
+  string role = 12;
+}
+
+message GetRowResponse {
+  bytes row_json = 1;
+  bool found = 2;
+}
+
+message InsertRowRequest {
+  string table = 1;
+  bytes body_json = 2; // JSON object of column values
+  string user_id = 10;
+  string project_id = 11;
+  string role = 12;
+}
+
+message InsertRowResponse {
+  bytes row_json = 1;
+}
+
+message UpdateRowRequest {
+  string table = 1;
+  string id = 2;
+  bytes body_json = 3;
+  string user_id = 10;
+  string project_id = 11;
+  string role = 12;
+}
+
+message UpdateRowResponse {
+  bytes row_json = 1;
+  bool found = 2;
+}
+
+message DeleteRowRequest {
+  string table = 1;
+  string id = 2;
+  string user_id = 10;
+  string project_id = 11;
+  string role = 12;
+}
+
+message DeleteRowResponse {
+  bool found = 1;
+}

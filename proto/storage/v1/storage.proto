@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package storage.v1;
+
+option go_package = "github.com/garancehq/garance/proto/storage/v1;storagev1";
+
+service StorageService {
+  rpc CreateBucket(CreateBucketRequest) returns (BucketResponse);
+  rpc ListBuckets(ListBucketsRequest) returns (ListBucketsResponse);
+  rpc DeleteBucket(DeleteBucketRequest) returns (DeleteBucketResponse);
+  rpc Upload(UploadRequest) returns (FileResponse);
+  rpc Download(DownloadRequest) returns (DownloadResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc CreateSignedURL(CreateSignedURLRequest) returns (SignedURLResponse);
+}
+
+message CreateBucketRequest {
+  string name = 1;
+  bool is_public = 2;
+  int64 max_file_size = 3; // 0 = no limit
+  repeated string allowed_mime_types = 4;
+}
+
+message BucketResponse {
+  string id = 1;
+  string name = 2;
+  bool is_public = 3;
+  int64 max_file_size = 4;
+  repeated string allowed_mime_types = 5;
+  string created_at = 6;
+}
+
+message ListBucketsRequest {}
+
+message ListBucketsResponse {
+  repeated BucketResponse buckets = 1;
+}
+
+message DeleteBucketRequest {
+  string name = 1;
+}
+
+message DeleteBucketResponse {}
+
+message UploadRequest {
+  string bucket = 1;
+  string file_name = 2;
+  bytes content = 3;
+  string mime_type = 4;
+  string owner_id = 5; // from JWT
+}
+
+message FileResponse {
+  string id = 1;
+  string bucket = 2;
+  string name = 3;
+  int64 size = 4;
+  string mime_type = 5;
+  string owner_id = 6;
+  string created_at = 7;
+}
+
+message DownloadRequest {
+  string bucket = 1;
+  string file_name = 2;
+}
+
+message DownloadResponse {
+  bytes content = 1;
+  string mime_type = 2;
+  int64 size = 3;
+}
+
+message DeleteFileRequest {
+  string bucket = 1;
+  string file_name = 2;
+}
+
+message DeleteFileResponse {}
+
+message ListFilesRequest {
+  string bucket = 1;
+  string prefix = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message ListFilesResponse {
+  repeated FileResponse files = 1;
+}
+
+message CreateSignedURLRequest {
+  string bucket = 1;
+  string file_name = 2;
+  int32 expires_in = 3; // seconds
+}
+
+message SignedURLResponse {
+  string signed_url = 1;
+}
