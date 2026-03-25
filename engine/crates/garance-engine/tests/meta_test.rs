@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use axum_test::TestServer;
+use serde_json::json;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 
@@ -79,12 +80,33 @@ async fn test_get_schema_single_table() {
 async fn test_reload_schema() {
     let (_container, server) = setup().await;
 
-    // Reload should succeed and return correct format
+    // "posts" table doesn't exist in the introspected schema
+    let response = server.get("/api/v1/_schema/posts").await;
+    response.assert_status(axum::http::StatusCode::NOT_FOUND);
+
+    // Create it via rpc/query in readwrite mode (bypasses the in-memory schema)
+    let response = server.post("/api/v1/rpc/query")
+        .add_header(axum::http::header::HeaderName::from_static("x-garance-sql-mode"), axum::http::header::HeaderValue::from_static("readwrite"))
+        .json(&json!({"sql": "CREATE TABLE posts (id serial PRIMARY KEY, title text NOT NULL)"}))
+        .await;
+    response.assert_status_ok();
+
+    // Still not visible — schema not reloaded yet
+    let response = server.get("/api/v1/_schema/posts").await;
+    response.assert_status(axum::http::StatusCode::NOT_FOUND);
+
+    // Reload
     let response = server.post("/api/v1/_reload").await;
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
-    assert_eq!(body["tables"], 1); // users table
+    assert_eq!(body["tables"], 2); // users + posts
     assert!(body["reloaded_at"].is_string());
+
+    // Now "posts" should be visible
+    let response = server.get("/api/v1/_schema/posts").await;
+    response.assert_status_ok();
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["name"], "posts");
 }
 
 #[tokio::test]

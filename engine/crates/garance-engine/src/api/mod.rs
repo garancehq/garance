@@ -1,5 +1,6 @@
 pub mod error;
 pub mod routes;
+pub mod sql_guard;
 pub mod state;
 
 use axum::{routing::get, routing::post, Router};
@@ -15,6 +16,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/_schema", get(routes::get_schema))
         .route("/api/v1/_schema/{table}", get(routes::get_schema_table))
         .route("/api/v1/_reload", post(routes::reload_schema))
+        // SQL execution
+        .route("/api/v1/rpc/query", post(routes::execute_sql))
         // Health
         .route("/health", get(|| async { "ok" }))
         .with_state(state)

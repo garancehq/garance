@@ -1,11 +1,13 @@
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
+use serde::Deserialize;
 use serde_json::{json, Value, Map};
 use std::collections::HashMap;
 
 use super::error::ApiError;
+use super::sql_guard;
 use super::state::AppState;
 use crate::query::filter::parse_query_params;
 use crate::query::builder::*;
@@ -100,6 +102,94 @@ pub async fn reload_schema(
         "tables": table_count,
         "reloaded_at": chrono::Utc::now().to_rfc3339(),
     })))
+}
+
+// ─── SQL execution ───────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct SqlRequest {
+    sql: String,
+}
+
+/// POST /api/v1/rpc/query — execute scoped SQL
+pub async fn execute_sql(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SqlRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    // Validate SQL
+    sql_guard::validate_sql(&body.sql).map_err(|e| ApiError {
+        error: super::error::ApiErrorBody {
+            code: "VALIDATION_ERROR".into(),
+            message: e.to_string(),
+            status: 400,
+            details: None,
+        },
+    })?;
+
+    // Check readwrite mode
+    let readwrite = headers
+        .get("x-garance-sql-mode")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.eq_ignore_ascii_case("readwrite"))
+        .unwrap_or(false);
+
+    let client = state.pool.get().await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+
+    let start = std::time::Instant::now();
+
+    // Helper to map PG errors in transaction setup
+    let pg_err = |e: tokio_postgres::Error| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    };
+
+    // Begin transaction with scoped search_path
+    client.execute("BEGIN", &[]).await.map_err(&pg_err)?;
+    client.execute("SET LOCAL search_path TO public", &[]).await.map_err(&pg_err)?;
+    if !readwrite {
+        client.execute("SET TRANSACTION READ ONLY", &[]).await.map_err(&pg_err)?;
+    }
+
+    // Execute and handle result
+    let result = client.query(&body.sql, &[]).await;
+
+    match result {
+        Ok(rows) => {
+            client.execute("COMMIT", &[]).await.map_err(&pg_err)?;
+            let duration_ms = start.elapsed().as_millis() as u64;
+
+            let columns: Vec<String> = if rows.is_empty() {
+                vec![]
+            } else {
+                rows[0].columns().iter().map(|c| c.name().to_string()).collect()
+            };
+
+            let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
+            let row_count = json_rows.len();
+
+            Ok(Json(json!({
+                "columns": columns,
+                "rows": json_rows,
+                "row_count": row_count,
+                "duration_ms": duration_ms,
+            })))
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            let duration_ms = start.elapsed().as_millis() as u64;
+
+            Err(ApiError {
+                error: super::error::ApiErrorBody {
+                    code: "VALIDATION_ERROR".into(),
+                    message: format!("SQL error: {}", e),
+                    status: 400,
+                    details: Some(json!({ "duration_ms": duration_ms })),
+                },
+            })
+        }
+    }
 }
 
 // ─── CRUD endpoints ──────────────────────────────────────────────────────────
