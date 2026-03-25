@@ -6,7 +6,7 @@
 
 **Architecture:** Cargo workspace with 3 crates: `garance-pooler` (connection pool with `search_path` support), `garance-engine` (introspection, query building, HTTP+gRPC server), `garance-codegen` (TypeScript type generation). The Engine exposes both an HTTP API (for direct dev access) and a gRPC interface (for Gateway communication in production). All PG queries go through the integrated pooler.
 
-**Tech Stack:** Rust 1.80+, axum (HTTP), tonic (gRPC), tokio-postgres + deadpool-postgres (PG), serde (JSON), testcontainers (integration tests)
+**Tech Stack:** Rust 1.85+ (stable), axum 0.8 (HTTP), tokio-postgres + deadpool-postgres (PG), serde (JSON), testcontainers (integration tests). gRPC (tonic) is deferred to Plan 4 (Gateway).
 
 **Spec:** `docs/superpowers/specs/2026-03-25-garance-baas-design.md` (sections 3, 5, 13, 14, 15)
 
@@ -52,12 +52,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+url = "2"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 axum = "0.8"
-tonic = "0.12"
-prost = "0.13"
 ```
 
 - [ ] **Step 2: Create garance-pooler Cargo.toml**
@@ -73,6 +72,8 @@ edition.workspace = true
 tokio-postgres.workspace = true
 deadpool-postgres.workspace = true
 tokio.workspace = true
+serde.workspace = true
+url.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
@@ -103,13 +104,11 @@ thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 axum.workspace = true
-tonic.workspace = true
-prost.workspace = true
 
 [dev-dependencies]
 testcontainers = "0.23"
 testcontainers-modules = { version = "0.11", features = ["postgres"] }
-axum-test = "16"
+axum-test = "17"
 ```
 
 - [ ] **Step 4: Create garance-codegen Cargo.toml**
@@ -176,6 +175,8 @@ channel = "stable"
 /target
 ```
 
+Note: `Cargo.lock` MUST be committed (Rust convention for binaries). It will be generated on first `cargo build`.
+
 - [ ] **Step 7: Verify workspace compiles**
 
 Run: `cd engine && cargo build`
@@ -184,7 +185,7 @@ Expected: Compiles without errors.
 Run: `cargo test`
 Expected: 0 tests, all pass.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Commit (include Cargo.lock)**
 
 ```bash
 git add engine/
@@ -259,8 +260,6 @@ impl PoolConfig {
     }
 }
 ```
-
-Add `url = "2"` to `[dependencies]` in `engine/crates/garance-pooler/Cargo.toml`.
 
 - [ ] **Step 3: Write the pool with search_path support**
 
@@ -795,40 +794,34 @@ async fn introspect_primary_key(client: &Client, schema_name: &str, table_name: 
 async fn introspect_foreign_keys(client: &Client, schema_name: &str, table_name: &str) -> Result<Vec<ForeignKey>, tokio_postgres::Error> {
     let rows = client.query(
         "SELECT
+            tc.constraint_name,
             kcu.column_name,
             ccu.table_name AS referenced_table,
             ccu.column_name AS referenced_column
          FROM information_schema.table_constraints tc
          JOIN information_schema.key_column_usage kcu
            ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_schema = kcu.table_schema
          JOIN information_schema.constraint_column_usage ccu
            ON tc.constraint_name = ccu.constraint_name
+           AND tc.table_schema = ccu.table_schema
          WHERE tc.table_schema = $1
            AND tc.table_name = $2
-           AND tc.constraint_type = 'FOREIGN KEY'",
+           AND tc.constraint_type = 'FOREIGN KEY'
+         ORDER BY tc.constraint_name, kcu.ordinal_position",
         &[&schema_name, &table_name],
     ).await?;
 
-    let mut fk_map: HashMap<(String, String), (Vec<String>, Vec<String>)> = HashMap::new();
+    // Group by constraint name to correctly handle composite FKs
+    // and multiple FKs to the same referenced table
+    let mut fks_by_constraint: HashMap<String, ForeignKey> = HashMap::new();
     for row in &rows {
+        let constraint: String = row.get::<_, &str>("constraint_name").to_string();
         let col: String = row.get::<_, &str>("column_name").to_string();
         let ref_table: String = row.get::<_, &str>("referenced_table").to_string();
         let ref_col: String = row.get::<_, &str>("referenced_column").to_string();
 
-        let key = (ref_table.clone(), ref_col.clone());
-        let entry = fk_map.entry(key).or_insert_with(|| (vec![], vec![]));
-        entry.0.push(col);
-        entry.1.push(ref_col);
-    }
-
-    // Simplification: group by referenced table
-    let mut fks_by_table: HashMap<String, ForeignKey> = HashMap::new();
-    for row in &rows {
-        let col: String = row.get::<_, &str>("column_name").to_string();
-        let ref_table: String = row.get::<_, &str>("referenced_table").to_string();
-        let ref_col: String = row.get::<_, &str>("referenced_column").to_string();
-
-        let fk = fks_by_table.entry(ref_table.clone()).or_insert_with(|| ForeignKey {
+        let fk = fks_by_constraint.entry(constraint).or_insert_with(|| ForeignKey {
             columns: vec![],
             referenced_table: ref_table,
             referenced_columns: vec![],
@@ -841,7 +834,7 @@ async fn introspect_foreign_keys(client: &Client, schema_name: &str, table_name:
         }
     }
 
-    Ok(fks_by_table.into_values().collect())
+    Ok(fks_by_constraint.into_values().collect())
 }
 
 async fn introspect_indexes(client: &Client, schema_name: &str, table_name: &str) -> Result<Vec<Index>, tokio_postgres::Error> {
@@ -1215,7 +1208,7 @@ pub fn build_select(table: &Table, qp: &QueryParams) -> Result<SqlQuery, QueryEr
                     });
                 }
             }
-            cols.join(", ")
+            cols.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", ")
         }
         None => "*".to_string(),
     };
@@ -1257,8 +1250,9 @@ pub fn build_select(table: &Table, qp: &QueryParams) -> Result<SqlQuery, QueryEr
                     conditions.push(format!("\"{}\" IN ({})", filter.column, placeholders.join(", ")));
                 }
                 _ => {
+                    // Cast column to text for comparison — allows string params to match any PG type
                     params.push(filter.value.clone());
-                    conditions.push(format!("\"{}\" {} ${}", filter.column, filter.operator.to_sql(), param_idx));
+                    conditions.push(format!("\"{}\"::text {} ${}", filter.column, filter.operator.to_sql(), param_idx));
                     param_idx += 1;
                 }
             }
@@ -1296,7 +1290,8 @@ pub fn build_select_by_id(table: &Table, id_value: &str) -> Result<SqlQuery, Que
     })?;
 
     let pk_col = &pk[0]; // Support single-column PK for now
-    let sql = format!("SELECT * FROM \"{}\" WHERE \"{}\" = $1", table.name, pk_col);
+    // Cast to text so string param works with any PK type (uuid, serial, etc.)
+    let sql = format!("SELECT * FROM \"{}\" WHERE \"{}\"::text = $1", table.name, pk_col);
     Ok(SqlQuery { sql, params: vec![id_value.to_string()] })
 }
 
@@ -1344,7 +1339,7 @@ pub fn build_update(table: &Table, id_value: &str, columns: &[String]) -> Result
 
     let pk_col = &pk[0];
     let sql = format!(
-        "UPDATE \"{}\" SET {} WHERE \"{}\" = ${} RETURNING *",
+        "UPDATE \"{}\" SET {} WHERE \"{}\"::text = ${} RETURNING *",
         table.name,
         set_clauses.join(", "),
         pk_col,
@@ -1361,7 +1356,7 @@ pub fn build_delete(table: &Table, id_value: &str) -> Result<SqlQuery, QueryErro
     })?;
 
     let pk_col = &pk[0];
-    let sql = format!("DELETE FROM \"{}\" WHERE \"{}\" = $1", table.name, pk_col);
+    let sql = format!("DELETE FROM \"{}\" WHERE \"{}\"::text = $1", table.name, pk_col);
     Ok(SqlQuery { sql, params: vec![id_value.to_string()] })
 }
 ```
@@ -1462,7 +1457,7 @@ fn test_build_select_with_filters() {
         ..Default::default()
     };
     let result = build_select(&table, &qp).unwrap();
-    assert_eq!(result.sql, "SELECT * FROM \"users\" WHERE \"age\" >= $1 LIMIT 10");
+    assert_eq!(result.sql, "SELECT * FROM \"users\" WHERE \"age\"::text >= $1 LIMIT 10");
     assert_eq!(result.params, vec!["18"]);
 }
 
@@ -1480,7 +1475,7 @@ fn test_build_select_unknown_column_rejected() {
 fn test_build_select_by_id() {
     let table = test_table();
     let result = build_select_by_id(&table, "abc-123").unwrap();
-    assert_eq!(result.sql, "SELECT * FROM \"users\" WHERE \"id\" = $1");
+    assert_eq!(result.sql, "SELECT * FROM \"users\" WHERE \"id\"::text = $1");
     assert_eq!(result.params, vec!["abc-123"]);
 }
 
@@ -1497,14 +1492,14 @@ fn test_build_update() {
     let table = test_table();
     let cols = vec!["name".into()];
     let result = build_update(&table, "abc-123", &cols).unwrap();
-    assert_eq!(result.sql, "UPDATE \"users\" SET \"name\" = $1 WHERE \"id\" = $2 RETURNING *");
+    assert_eq!(result.sql, "UPDATE \"users\" SET \"name\" = $1 WHERE \"id\"::text = $2 RETURNING *");
 }
 
 #[test]
 fn test_build_delete() {
     let table = test_table();
     let result = build_delete(&table, "abc-123").unwrap();
-    assert_eq!(result.sql, "DELETE FROM \"users\" WHERE \"id\" = $1");
+    assert_eq!(result.sql, "DELETE FROM \"users\" WHERE \"id\"::text = $1");
 }
 ```
 
@@ -1844,25 +1839,35 @@ pub async fn delete_row(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Convert a PG row to a JSON object.
-/// Uses text representations for all columns to avoid type-specific handling.
+/// Convert a PG row to a JSON object with type-aware serialization.
 fn row_to_json(row: &tokio_postgres::Row) -> Value {
+    use tokio_postgres::types::Type;
+
     let mut obj = Map::new();
     for (i, col) in row.columns().iter().enumerate() {
-        let value: Option<String> = row.get(i);
-        obj.insert(
-            col.name().to_string(),
-            match value {
-                Some(v) => Value::String(v),
-                None => Value::Null,
-            },
-        );
+        let value = match *col.type_() {
+            Type::BOOL => row.get::<_, Option<bool>>(i).map(Value::Bool).unwrap_or(Value::Null),
+            Type::INT2 => row.get::<_, Option<i16>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
+            Type::INT4 => row.get::<_, Option<i32>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
+            Type::INT8 => row.get::<_, Option<i64>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
+            Type::FLOAT4 => row.get::<_, Option<f32>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
+            Type::FLOAT8 => row.get::<_, Option<f64>>(i).map(|v| json!(v)).unwrap_or(Value::Null),
+            Type::UUID => row.get::<_, Option<uuid::Uuid>>(i).map(|v| Value::String(v.to_string())).unwrap_or(Value::Null),
+            Type::JSON | Type::JSONB => row.get::<_, Option<serde_json::Value>>(i).unwrap_or(Value::Null),
+            _ => {
+                // Fallback: try as text
+                row.get::<_, Option<&str>>(i)
+                    .map(|v| Value::String(v.to_string()))
+                    .unwrap_or(Value::Null)
+            }
+        };
+        obj.insert(col.name().to_string(), value);
     }
     Value::Object(obj)
 }
 ```
 
-Note: `row_to_json` uses text representation. In a later task, we'll add proper type-aware serialization.
+`row_to_json` uses type-aware serialization based on `tokio_postgres::types::Type`.
 
 - [ ] **Step 4: Create API module and router**
 
@@ -2573,10 +2578,10 @@ git commit -m ":sparkles: feat(engine): add TypeScript type generation from PG s
 
 ```dockerfile
 # engine/Dockerfile
-FROM rust:1.80-slim AS builder
+FROM rust:1.85-slim AS builder
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y pkg-config libssl-dev protobuf-compiler && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
@@ -2643,4 +2648,5 @@ git commit -m ":whale: build(engine): add multi-stage Dockerfile"
 - Permission enforcement from access rules (depends on Auth service — Plan 2)
 - Migration diff engine (garance.schema.json vs current PG schema → SQL migrations)
 - OpenTelemetry tracing integration
-- Proper type-aware JSON serialization (currently uses text representation)
+- `POST /api/v1/rpc/{function}` — PG function calls (requires security review)
+- `GET /api/v1/{table}/{id}/{relation}` — nested relation loading (requires join strategy design)
