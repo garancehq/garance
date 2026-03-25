@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use serde_json::{Map, Value};
 
 use crate::api::routes::row_to_json;
+use crate::api::sql_guard;
 use crate::query::filter::parse_query_params;
 use crate::query::builder::*;
 use crate::schema::types::Schema;
@@ -172,5 +174,119 @@ impl EngineService for EngineGrpcService {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(DeleteRowResponse { found: affected > 0 }))
+    }
+
+    // ─── Meta RPCs ──────────────────────────────────────────────────────────
+
+    async fn list_tables(&self, _request: Request<ListTablesRequest>) -> Result<Response<ListTablesResponse>, Status> {
+        let schema = self.schema.read().await;
+
+        let client = self.pool.get().await.map_err(|e| Status::internal(e.to_string()))?;
+        let stat_rows = client.query(
+            "SELECT relname, n_live_tup FROM pg_stat_user_tables WHERE schemaname = 'public'",
+            &[],
+        ).await.unwrap_or_default();
+
+        let mut row_counts: HashMap<String, i64> = HashMap::new();
+        for row in &stat_rows {
+            let name: &str = row.get("relname");
+            let count: i64 = row.get("n_live_tup");
+            row_counts.insert(name.to_string(), count);
+        }
+
+        const RESERVED_NAMES: &[&str] = &["_tables", "_schema", "_reload", "rpc"];
+
+        let mut tables: Vec<TableSummary> = schema.tables.iter()
+            .filter(|(name, _)| !RESERVED_NAMES.contains(&name.as_str()))
+            .map(|(name, table)| {
+                TableSummary {
+                    name: name.clone(),
+                    columns: table.columns.len() as i32,
+                    primary_key: table.primary_key.clone().unwrap_or_default(),
+                    row_count: row_counts.get(name).copied().unwrap_or(0),
+                }
+            }).collect();
+        tables.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(Response::new(ListTablesResponse { tables }))
+    }
+
+    async fn get_schema(&self, request: Request<GetSchemaRequest>) -> Result<Response<GetSchemaResponse>, Status> {
+        let req = request.into_inner();
+        let schema = self.schema.read().await;
+
+        let schema_json = if req.table.is_empty() {
+            serde_json::to_vec(&*schema).map_err(|e| Status::internal(e.to_string()))?
+        } else {
+            let table = schema.tables.get(&req.table)
+                .ok_or_else(|| Status::not_found(format!("table '{}' not found", req.table)))?;
+            serde_json::to_vec(table).map_err(|e| Status::internal(e.to_string()))?
+        };
+
+        Ok(Response::new(GetSchemaResponse { schema_json }))
+    }
+
+    async fn execute_sql(&self, request: Request<ExecuteSqlRequest>) -> Result<Response<ExecuteSqlResponse>, Status> {
+        let req = request.into_inner();
+
+        sql_guard::validate_sql(&req.sql)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        let client = self.pool.get().await.map_err(|e| Status::internal(e.to_string()))?;
+        let start = std::time::Instant::now();
+
+        // Begin transaction with scoped search_path
+        client.execute("BEGIN", &[]).await.map_err(|e| Status::internal(e.to_string()))?;
+        client.execute("SET LOCAL search_path TO public", &[]).await.map_err(|e| Status::internal(e.to_string()))?;
+        if !req.readwrite {
+            client.execute("SET TRANSACTION READ ONLY", &[]).await.map_err(|e| Status::internal(e.to_string()))?;
+        }
+
+        let result = client.query(&req.sql, &[]).await;
+
+        match result {
+            Ok(rows) => {
+                client.execute("COMMIT", &[]).await.map_err(|e| Status::internal(e.to_string()))?;
+                let duration_ms = start.elapsed().as_millis() as i64;
+
+                let columns: Vec<String> = if rows.is_empty() {
+                    vec![]
+                } else {
+                    rows[0].columns().iter().map(|c| c.name().to_string()).collect()
+                };
+
+                let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
+                let row_count = json_rows.len() as i64;
+                let rows_json = serde_json::to_vec(&json_rows).map_err(|e| Status::internal(e.to_string()))?;
+
+                Ok(Response::new(ExecuteSqlResponse {
+                    columns,
+                    rows_json,
+                    row_count,
+                    duration_ms,
+                }))
+            }
+            Err(e) => {
+                let _ = client.execute("ROLLBACK", &[]).await;
+                Err(Status::invalid_argument(format!("SQL error: {}", e)))
+            }
+        }
+    }
+
+    async fn reload_schema(&self, _request: Request<ReloadSchemaRequest>) -> Result<Response<ReloadSchemaResponse>, Status> {
+        let client = self.pool.get().await.map_err(|e| Status::internal(e.to_string()))?;
+
+        // Introspect FIRST, before acquiring write lock — error safety
+        let new_schema = crate::schema::introspect(&client, "public").await
+            .map_err(|e| Status::internal(format!("introspection failed: {}", e)))?;
+
+        let table_count = new_schema.tables.len() as i32;
+        let mut schema = self.schema.write().await;
+        *schema = new_schema;
+
+        Ok(Response::new(ReloadSchemaResponse {
+            tables: table_count,
+            reloaded_at: chrono::Utc::now().to_rfc3339(),
+        }))
     }
 }
