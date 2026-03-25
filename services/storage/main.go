@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"google.golang.org/grpc"
+
 	"github.com/garancehq/garance/services/storage/internal/config"
+	"github.com/garancehq/garance/services/storage/internal/grpcserver"
 	"github.com/garancehq/garance/services/storage/internal/handler"
 	s3client "github.com/garancehq/garance/services/storage/internal/s3"
 	"github.com/garancehq/garance/services/storage/internal/service"
@@ -48,11 +52,30 @@ func main() {
 
 	server := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
 
+	// gRPC server
+	grpcAddr := getEnv("GRPC_ADDR", "0.0.0.0:5002")
+	grpcSrv := grpc.NewServer()
+	storageGRPC := grpcserver.NewStorageGRPCServer(storageSvc)
+	storageGRPC.Register(grpcSrv)
+
+	lis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		log.Fatalf("failed to listen for gRPC: %v", err)
+	}
+
+	go func() {
+		log.Printf("garance storage gRPC listening on %s", grpcAddr)
+		if err := grpcSrv.Serve(lis); err != nil {
+			log.Fatalf("gRPC server error: %v", err)
+		}
+	}()
+
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Println("shutting down...")
+		grpcSrv.GracefulStop()
 		server.Shutdown(ctx)
 	}()
 
@@ -60,4 +83,11 @@ func main() {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
 }
