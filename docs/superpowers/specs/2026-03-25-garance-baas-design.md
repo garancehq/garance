@@ -38,24 +38,66 @@ Garance est un Backend-as-a-Service (BaaS) open source, souverain, positionné c
 │  Routing · Rate limiting · Auth middleware · CORS    │
 └──┬──────────┬──────────────┬───────────────┬────────┘
    │          │              │               │
-┌──▼───┐  ┌──▼───────┐  ┌───▼────────┐  ┌───▼──────┐
-│ Auth │  │ Query    │  │ Storage    │  │Dashboard │
-│ (Go) │  │ Engine   │  │ Service    │  │ (Next.js)│
-│      │  │ (Rust)   │  │ (Go)       │  │          │
-└──┬───┘  └──┬───────┘  └───┬────────┘  └──────────┘
-   │         │              │
-   │    ┌────▼────────┐  ┌──▼──────────────┐
-   │    │ Connection  │  │ S3-compatible    │
-   │    │ Pooler      │  │ (Scaleway/MinIO) │
-   │    │ (Rust)      │  └─────────────────┘
-   │    └────┬────────┘
+┌──▼───┐  ┌──▼───────────┐  ┌───▼────────┐  ┌───▼──────┐
+│ Auth │  │ Query Engine │  │ Storage    │  │Dashboard │
+│ (Go) │  │ (Rust)       │  │ Service    │  │ (Next.js)│
+│      │  │ + Pooler     │  │ (Go)       │  │          │
+└──┬───┘  └──┬───────────┘  └───┬────────┘  └──────────┘
+   │         │                  │
+   │         │               ┌──▼──────────────┐
+   │         │               │ S3-compatible    │
+   │         │               │ (Scaleway/MinIO) │
+   │         │               └─────────────────┘
    │         │
 ┌──▼─────────▼──┐
 │  PostgreSQL   │
 └───────────────┘
 ```
 
-Communication inter-services : gRPC entre les services Go et le Query Engine Rust. Le Connection Pooler est une lib Rust intégrée au Query Engine.
+Le Connection Pooler est une lib Rust intégrée au Query Engine (pas un service séparé).
+
+### Communication inter-services
+
+Le Gateway communique avec les services backend via **gRPC** (contrats définis dans `proto/`). Le Gateway fait du **protocol translation** : il reçoit du REST/HTTP des clients et traduit en appels gRPC vers les services internes.
+
+| Source | Destination | Protocole | Quand |
+|---|---|---|---|
+| Gateway | Engine | gRPC | Requêtes data (CRUD, RPC) |
+| Gateway | Auth | gRPC | Login, signup, token refresh, OAuth callbacks |
+| Gateway | Storage | gRPC | Upload, download, signed URLs |
+| Auth | PostgreSQL | TCP (libpq) | Sessions, users, identities (via schéma `garance_auth`) |
+| Engine | PostgreSQL | TCP (pooler intégré) | Requêtes data utilisateur |
+| Storage | S3 | HTTPS | Fichiers binaires |
+| Storage | PostgreSQL | TCP (libpq) | Métadonnées fichiers (via schéma `garance_storage`) |
+| Dashboard | Gateway | HTTPS | Mêmes API que les SDK clients + endpoints admin |
+
+### Flux principaux
+
+**1. Requête data (GET /api/v1/users)**
+```
+Client → Gateway (HTTP) → Engine (gRPC) → PostgreSQL
+                 ↓
+         Vérifie JWT (claims project_id, user_id)
+         Injecte search_path + applique permissions du schema
+```
+
+**2. Authentification (POST /auth/v1/signin)**
+```
+Client → Gateway (HTTP) → Auth (gRPC) → PostgreSQL (garance_auth)
+                                ↓
+                         Vérifie credentials (argon2id)
+                         Génère access token (JWT) + refresh token
+                         ← Retourne tokens au client
+```
+
+**3. Upload de fichier (POST /storage/v1/buckets/avatars/upload)**
+```
+Client → Gateway (HTTP, multipart) → Storage (gRPC stream)
+                 ↓                         ↓
+         Vérifie JWT                Vérifie permissions bucket
+                                   Upload vers S3 (Scaleway/MinIO)
+                                   Écrit métadonnées → PostgreSQL (garance_storage)
+```
 
 ## 4. Stack Technique
 
@@ -75,25 +117,27 @@ Architecture polyglotte ciblée : chaque module dans le langage le plus adapté.
 - Génération automatique d'API REST (CRUD par table)
 - Parsing et validation des requêtes → SQL sûr
 - Connection pooling intégré
-- Lecture du schema déclaratif `garance.schema.ts` et génération de migrations
+- Lecture du schema compilé (`garance.schema.json`) et génération de migrations
 - Génération de types multi-langage (TypeScript, Dart, Swift, Kotlin)
 
 ### API REST auto-générée
 
 ```
-GET    /api/{table}                    → liste (filtres, pagination, tri)
-GET    /api/{table}/{id}               → un enregistrement
-POST   /api/{table}                    → insertion
-PATCH  /api/{table}/{id}               → mise à jour partielle
-DELETE /api/{table}/{id}               → suppression
-GET    /api/{table}/{id}/{relation}    → relations imbriquées
-POST   /api/rpc/{function}            → appel de fonctions PG
+GET    /api/v1/{table}                    → liste (filtres, pagination, tri)
+GET    /api/v1/{table}/{id}               → un enregistrement
+POST   /api/v1/{table}                    → insertion
+PATCH  /api/v1/{table}/{id}               → mise à jour partielle
+DELETE /api/v1/{table}/{id}               → suppression
+GET    /api/v1/{table}/{id}/{relation}    → relations imbriquées
+POST   /api/v1/rpc/{function}            → appel de fonctions PG
 ```
+
+Les autres services suivent le même pattern : `/auth/v1/...`, `/storage/v1/...`.
 
 ### Filtrage
 
 ```
-GET /api/users?age=gte.18&city=eq.Paris&select=id,name,email&order=name.asc&limit=20
+GET /api/v1/users?age=gte.18&city=eq.Paris&select=id,name,email&order=name.asc&limit=20
 ```
 
 ### Schema Déclaratif (`garance.schema.ts`)
@@ -125,6 +169,21 @@ export default defineSchema({
   }),
 })
 ```
+
+### Pipeline de compilation du schema
+
+Le Query Engine (Rust) ne parse pas directement le TypeScript. Le processus :
+
+```
+garance.schema.ts → @garance/schema (Node.js) → garance.schema.json → Engine (Rust)
+```
+
+1. Le dev écrit `garance.schema.ts` (TypeScript, avec autocompletion)
+2. `garance db migrate` (CLI Go) appelle `@garance/schema` (Node.js) qui compile le `.ts` en `garance.schema.json`
+3. Le Engine (Rust) lit le JSON, le compare au schéma PG actuel, et génère les migrations SQL
+4. Les migrations sont appliquées à PostgreSQL
+
+Le JSON intermédiaire est un format stable et versionné. Le Engine ne dépend jamais de Node.js/TypeScript à runtime.
 
 ### Différenciation vs Supabase
 
@@ -393,7 +452,7 @@ volumes:
 ### Déploiement
 
 ```bash
-curl -sSL https://garance.io/install.sh -o docker-compose.yml
+curl -sSL https://garance.io/docker-compose.yml -o docker-compose.yml
 echo "DB_PASSWORD=$(openssl rand -base64 32)" > .env
 docker compose up -d
 ```
@@ -416,8 +475,14 @@ Images multi-arch (`linux/amd64` + `linux/arm64`) sur GitHub Container Registry 
 
 - Un schéma PostgreSQL par projet
 - `SET search_path = project_{id}` à chaque requête
-- Buckets S3 préfixés par projet
+- Buckets S3 préfixés par projet (`project-{id}/bucket-name/`)
 - JWT contient `project_id`, vérifié systématiquement
+
+**Contraintes du modèle par schéma :**
+- Les migrations utilisateur doivent être appliquées à chaque schéma projet individuellement. Le Engine maintient un registre des migrations par projet et les applique de manière idempotente.
+- Le connection pooler utilise le mode **session** (pas transaction) pour supporter `SET search_path` par connexion.
+- Limite recommandée : ~1000 projets par instance PostgreSQL. Au-delà, migration vers une DB par projet (plan Enterprise).
+- Un schéma `garance_platform` stocke les métadonnées internes : projets, clés API, quotas, billing, configuration des providers OAuth.
 
 ### RGPD natif
 
@@ -442,7 +507,95 @@ Log de toutes les opérations d'écriture dans `garance_audit.events`. Rétentio
 | HDS | v2 |
 | ISO 27001 | v2 |
 
-## 13. Roadmap
+## 13. Format d'erreurs
+
+Toutes les API retournent un format d'erreur JSON standardisé :
+
+```json
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "You do not have access to this resource",
+    "status": 403,
+    "details": {}
+  }
+}
+```
+
+**Codes d'erreur principaux :**
+
+| Code | HTTP | Description |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Données invalides (détails dans `details.fields`) |
+| `UNAUTHORIZED` | 401 | Token manquant ou expiré |
+| `PERMISSION_DENIED` | 403 | Accès refusé par les permissions du schema |
+| `NOT_FOUND` | 404 | Ressource inexistante |
+| `CONFLICT` | 409 | Contrainte d'unicité violée |
+| `RATE_LIMITED` | 429 | Trop de requêtes |
+| `INTERNAL_ERROR` | 500 | Erreur interne (pas de détails exposés au client) |
+
+Les erreurs gRPC internes (entre services) sont traduites en codes HTTP par le Gateway avant d'être retournées au client.
+
+## 14. Observabilité
+
+**Logging :**
+- Format JSON structuré pour tous les services
+- Champs communs : `timestamp`, `level`, `service`, `project_id`, `request_id`, `trace_id`
+- Niveaux : `debug`, `info`, `warn`, `error`
+
+**Tracing distribué :**
+- OpenTelemetry intégré dès le MVP dans tous les services
+- Chaque requête client reçoit un `trace_id` au Gateway, propagé à tous les services en aval via les headers gRPC
+- Export vers stdout (dev) ou collecteur OTLP (production)
+
+**Métriques :**
+- Exposition Prometheus (`/metrics`) sur chaque service
+- Métriques clés : latence par endpoint, requêtes/s, erreurs/s, connexions PG actives, taille du pool
+
+**Dashboard Logs (MVP) :**
+- La page Logs du dashboard affiche les requêtes API récentes (stockées en mémoire ring buffer, pas en DB)
+- Filtrable par status, endpoint, durée
+- Production-grade log aggregation (Loki, Datadog) via export OTLP en v1
+
+## 15. Stratégie de tests
+
+| Couche | Outil | Scope |
+|---|---|---|
+| Engine (Rust) | `cargo test` + testcontainers (PostgreSQL) | Introspection, génération SQL, permissions, codegen |
+| Services (Go) | `go test` + testcontainers (PostgreSQL, MinIO) | Auth flows, storage operations, gateway routing |
+| CLI (Go) | `go test` | Parsing commandes, génération config |
+| Dashboard (TS) | Vitest + Playwright | Composants UI, flows E2E (table editor, SQL editor) |
+| SDK (TS) | Vitest | Client API, sérialisation, gestion des erreurs |
+| Intégration | Docker Compose + script de tests | Stack complète, scénarios utilisateur réels |
+
+**CI (GitHub Actions) :**
+- Pipeline par langage (Rust, Go, TypeScript) déclenché sur les fichiers modifiés
+- Tests d'intégration sur chaque PR (Docker Compose éphémère)
+- Lint + format check obligatoires avant merge
+
+## 16. Migration depuis Supabase
+
+Outil prévu en roadmap v1 : `garance migrate from-supabase`.
+
+**Points de compatibilité :**
+- PostgreSQL → PostgreSQL : migration de schéma directe (pg_dump/pg_restore)
+- Supabase Storage → Garance Storage : migration des fichiers bucket par bucket
+
+**Points d'incompatibilité à anticiper :**
+- RLS policies SQL → permissions déclaratives du schema (conversion manuelle ou assistée)
+- Structure des tables auth différente (`auth.users` Supabase vs `garance_auth.users`)
+- Format des JWT différent (claims custom)
+- Edge Functions Supabase (Deno) → non supportées au MVP
+
+Le SDK client (`@garance/sdk`) aura une API volontairement proche de `@supabase/supabase-js` pour minimiser le coût de migration côté code applicatif.
+
+## 17. Realtime (v1 — Elixir)
+
+Le choix d'Elixir pour le Realtime est motivé par la nature même du problème : maintenir des dizaines de milliers de connexions WebSocket simultanées avec des subscriptions par table/row. La BEAM VM (Erlang/OTP) est conçue nativement pour ça — un processus léger par connexion, supervision tree, hot reload. Go et Rust peuvent faire du WebSocket mais n'offrent pas le même modèle de concurrence massive (millions de processus légers) ni la tolérance aux pannes native (let it crash + supervisors).
+
+C'est le même choix que Supabase (Realtime en Elixir) et Discord (millions de connexions simultanées sur Elixir). L'ajout d'un 4e langage est un coût accepté car le Realtime est un service isolé avec une responsabilité unique.
+
+## 18. Roadmap
 
 ### MVP (v0.1) — "Utilisable par un dev solo"
 
@@ -495,7 +648,7 @@ Log de toutes les opérations d'écriture dans `garance_audit.events`. Rétentio
 7. Dashboard (Next.js)  ← consomme les mêmes API
 ```
 
-## 14. Identité & Distribution
+## 19. Identité & Distribution
 
 | Élément | Valeur |
 |---|---|
@@ -504,7 +657,7 @@ Log de toutes les opérations d'écriture dans `garance_audit.events`. Rétentio
 | Dashboard SaaS | dashboard.garance.io |
 | API projets | {projet}.garance.io |
 | GitHub | garancehq/garance |
-| npm | @garance/sdk, @garance/cli, @garance/schema |
+| npm | @garance/sdk, @garance/schema |
 | pub.dev | garance_dart |
 | Homebrew | garancehq/tap/garance |
 | Docker | ghcr.io/garancehq/* |
