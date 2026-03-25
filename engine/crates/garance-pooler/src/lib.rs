@@ -1,5 +1,7 @@
-//! Garance connection pooler with search_path support.
+pub mod config;
+pub mod error;
+pub mod pool;
 
-pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
-}
+pub use config::PoolConfig;
+pub use error::PoolError;
+pub use pool::GarancePool;
