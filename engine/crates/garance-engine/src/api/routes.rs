@@ -10,6 +10,100 @@ use super::state::AppState;
 use crate::query::filter::parse_query_params;
 use crate::query::builder::*;
 
+// ─── Meta endpoints ──────────────────────────────────────────────────────────
+
+/// GET /api/v1/_tables — list introspected tables with metadata
+pub async fn list_tables(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let schema = state.schema.read().await;
+
+    // Get approximate row counts from pg_stat_user_tables
+    let client = state.pool.get().await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+
+    let stat_rows = client.query(
+        "SELECT relname, n_live_tup FROM pg_stat_user_tables WHERE schemaname = 'public'",
+        &[],
+    ).await.unwrap_or_default();
+
+    let mut row_counts: HashMap<String, i64> = HashMap::new();
+    for row in &stat_rows {
+        let name: &str = row.get("relname");
+        let count: i64 = row.get("n_live_tup");
+        row_counts.insert(name.to_string(), count);
+    }
+
+    const RESERVED_NAMES: &[&str] = &["_tables", "_schema", "_reload", "rpc"];
+
+    let mut tables: Vec<Value> = schema.tables.iter()
+        .filter(|(name, _)| !RESERVED_NAMES.contains(&name.as_str()))
+        .map(|(name, table)| {
+        json!({
+            "name": name,
+            "columns": table.columns.len(),
+            "primary_key": table.primary_key,
+            "row_count": row_counts.get(name).copied(),
+        })
+    }).collect();
+    tables.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+
+    Ok(Json(tables))
+}
+
+/// GET /api/v1/_schema — full introspected schema
+pub async fn get_schema(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let schema = state.schema.read().await;
+    Ok(Json(json!(*schema)))
+}
+
+/// GET /api/v1/_schema/{table} — schema for a single table
+pub async fn get_schema_table(
+    State(state): State<AppState>,
+    Path(table_name): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let schema = state.schema.read().await;
+    match schema.tables.get(&table_name) {
+        Some(table) => Ok(Json(json!(table))),
+        None => Err(ApiError {
+            error: super::error::ApiErrorBody {
+                code: "NOT_FOUND".into(),
+                message: format!("table '{}' not found", table_name),
+                status: 404,
+                details: None,
+            },
+        }),
+    }
+}
+
+/// POST /api/v1/_reload — re-introspect PG schema without restart
+pub async fn reload_schema(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let client = state.pool.get().await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+
+    // Introspect FIRST, before acquiring write lock — error safety
+    let new_schema = crate::schema::introspect(&client, "public").await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: format!("introspection failed: {}", e), status: 500, details: None },
+    })?;
+
+    let table_count = new_schema.tables.len();
+    let mut schema = state.schema.write().await;
+    *schema = new_schema;
+
+    Ok(Json(json!({
+        "tables": table_count,
+        "reloaded_at": chrono::Utc::now().to_rfc3339(),
+    })))
+}
+
+// ─── CRUD endpoints ──────────────────────────────────────────────────────────
+
 pub async fn list_rows(
     State(state): State<AppState>,
     Path(table_name): Path<String>,
