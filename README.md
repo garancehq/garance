@@ -1,8 +1,8 @@
 # Garance
 
-**Open source Backend-as-a-Service** — A sovereign alternative to Supabase, built in Europe.
+**The open source Backend-as-a-Service.**
 
-Garance provides a managed PostgreSQL database with auto-generated REST API, authentication, file storage, and an admin dashboard. GDPR-compliant by design, open source by conviction.
+PostgreSQL database with auto-generated REST API, authentication, file storage, and an admin dashboard. Declare your schema in TypeScript, get a production-ready backend in minutes. Self-host anywhere or use the managed cloud.
 
 ## Architecture
 
@@ -167,11 +167,11 @@ cd sdks/typescript && npm test
 
 ## Why Garance
 
-- **Open source** (Apache 2.0) — self-host anywhere, audit everything
-- **GDPR-native** — account deletion, data export, audit trail built in
-- **Declarative schema** — define your database in TypeScript, not raw SQL
-- **Polyglot architecture** — each service in the best language for the job
-- **European infrastructure** — default hosting on Scaleway (Paris), no US dependency in the critical path
+- **Declarative schema** — define your database in TypeScript, not raw SQL. Permissions, relations, and storage rules in one file
+- **Built for performance** — Rust query engine, Go services, gRPC inter-service communication
+- **Open source** (Apache 2.0) — self-host anywhere, audit everything, no vendor lock-in
+- **Complete platform** — auth, storage, real-time (coming soon), and edge functions in one coherent stack
+- **GDPR-ready** — account deletion, data export, audit trail built in from day one
 
 ## License
 

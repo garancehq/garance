@@ -4,7 +4,7 @@ This file provides the context any AI agent needs to work on this repository.
 
 ## Overview
 
-Garance is an open source sovereign BaaS (alternative to Supabase). The MVP has 8 components in a polyglot monorepo (Rust, Go, TypeScript).
+Garance is an open source BaaS (Backend-as-a-Service). The MVP has 8 components in a polyglot monorepo (Rust, Go, TypeScript).
 
 ## Strict Rules
 

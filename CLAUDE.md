@@ -2,7 +2,7 @@
 
 ## Project
 
-Garance is an open source Backend-as-a-Service (BaaS), a sovereign alternative to Supabase. PostgreSQL + auto-generated REST API + Auth + Storage + Dashboard.
+Garance is an open source Backend-as-a-Service (BaaS). PostgreSQL + auto-generated REST API + Auth + Storage + Dashboard. Declarative schema in TypeScript.
 
 ## Structure
 
