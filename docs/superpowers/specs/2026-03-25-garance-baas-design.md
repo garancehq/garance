@@ -451,6 +451,13 @@ volumes:
 
 ### Déploiement
 
+**Option 1 : Script d'installation (recommandé)**
+```bash
+curl -sSL https://garance.io/install.sh | sh
+```
+Le script détecte l'OS/arch, installe la CLI `garance`, et propose de lancer `garance dev` ou de configurer un self-host production.
+
+**Option 2 : Docker Compose direct (sans CLI)**
 ```bash
 curl -sSL https://garance.io/docker-compose.yml -o docker-compose.yml
 echo "DB_PASSWORD=$(openssl rand -base64 32)" > .env
