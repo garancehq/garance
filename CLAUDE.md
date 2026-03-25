@@ -1,8 +1,8 @@
-# Garance — Instructions pour Claude Code
+# Garance — Claude Code Instructions
 
-## Projet
+## Project
 
-Garance est un BaaS (Backend-as-a-Service) souverain open source, alternative europeenne a Supabase. PostgreSQL + API REST auto-generee + Auth + Storage + Dashboard.
+Garance is an open source Backend-as-a-Service (BaaS), a sovereign alternative to Supabase. PostgreSQL + auto-generated REST API + Auth + Storage + Dashboard.
 
 ## Structure
 
@@ -19,56 +19,55 @@ garance/
 ├── sdks/
 │   └── typescript/   # TypeScript — @garance/sdk
 ├── dashboard/        # Next.js 16 — Admin UI (shadcn/ui)
-├── proto/            # Protobuf — contrats gRPC
+├── proto/            # Protobuf — gRPC contracts
 └── deploy/           # Docker Compose
 ```
 
 ## Conventions
 
-### Langages et outils
+### Languages & Tools
 
-- **Rust** : Cargo workspace, edition 2021, stable toolchain
-- **Go** : Go workspace (`services/go.work`), modules standards, `go test`
-- **TypeScript** : tsup (bundling), vitest (tests), pnpm/npm
-- **Next.js** : App Router, Server Components, shadcn/ui, Tailwind CSS, dark mode
-- **Proto** : buf pour le linting, protoc-gen-go + protoc-gen-go-grpc pour la generation Go, tonic-build pour Rust
+- **Rust**: Cargo workspace, edition 2021, stable toolchain
+- **Go**: Go workspace (`services/go.work`), standard modules, `go test`
+- **TypeScript**: tsup (bundling), vitest (tests), npm
+- **Next.js**: App Router, Server Components, shadcn/ui, Tailwind CSS, dark mode
+- **Proto**: buf for linting, protoc-gen-go + protoc-gen-go-grpc for Go, tonic-build for Rust
 
 ### Git
 
-- Format de commit : gitmoji + conventional commit (ex: `:sparkles: feat(engine): add query builder`)
-- Ne jamais ajouter de Co-Authored-By Claude ni de mention Claude/AI dans les commits
-- Un commit par fonctionnalite atomique
+- Commit format: gitmoji + conventional commit (e.g., `:sparkles: feat(engine): add query builder`)
+- Never add Co-Authored-By Claude or any AI mention in commits
+- One commit per atomic feature
 
 ### Architecture
 
-- Communication inter-services : gRPC (proto definitions dans `proto/`)
-- Chaque service expose HTTP + gRPC sur des ports separes
-- Ports : Engine 4000/5000, Auth 4001/5001, Storage 4002/5002, Gateway 8080, Dashboard 3000
-- Format d'erreur standardise : `{"error": {"code": "...", "message": "...", "status": N}}`
-- Base de donnees : PostgreSQL 17, schemas separes (`garance_auth`, `garance_storage`, `garance_platform`, `garance_audit`)
+- Inter-service communication: gRPC (proto definitions in `proto/`)
+- Each service exposes HTTP + gRPC on separate ports
+- Ports: Engine 4000/5000, Auth 4001/5001, Storage 4002/5002, Gateway 8080, Dashboard 3000
+- Standardized error format: `{"error": {"code": "...", "message": "...", "status": N}}`
+- Database: PostgreSQL 17, separate schemas (`garance_auth`, `garance_storage`, `garance_platform`, `garance_audit`)
 
-### Tests
+### Testing
 
-- **Rust** : `cargo test` (testcontainers pour les tests d'integration)
-- **Go** : `go test ./... -count=1` (testcontainers-go pour PostgreSQL et MinIO)
-- **TypeScript** : `vitest run`
-- Docker doit etre demarre pour les tests d'integration (testcontainers)
+- **Rust**: `cargo test` (testcontainers for integration tests)
+- **Go**: `go test ./... -count=1` (testcontainers-go for PostgreSQL and MinIO)
+- **TypeScript**: `vitest run`
+- Docker must be running for integration tests (testcontainers)
 
 ### Design (Dashboard)
 
-- Dark mode par defaut (zinc-950 bg, zinc-100 text, zinc-800 borders)
-- Geist Sans pour le texte, font-mono pour les donnees/code
-- shadcn/ui pour tous les composants UI
-- Pas d'emoji dans le code ou les fichiers sauf demande explicite
+- Dark mode by default (zinc-950 bg, zinc-100 text, zinc-800 borders)
+- Geist Sans for text, font-mono for data/code
+- shadcn/ui for all UI components
 
-## Commandes utiles
+## Useful Commands
 
 ```bash
 # Engine
 cd engine && cargo test
 cd engine && cargo build -p garance-engine
 
-# Services Go (auth, storage, gateway)
+# Go services (auth, storage, gateway)
 cd services/auth && go test ./... -count=1
 cd services/auth && go build ./...
 
@@ -85,7 +84,7 @@ cd sdks/typescript && npm test && npm run build
 # Dashboard
 cd dashboard && npm run build
 
-# Proto (regenerer le code)
+# Proto (regenerate code)
 cd proto && buf generate
 
 # Docker Compose (dev)
@@ -95,7 +94,7 @@ cd deploy && docker compose -f docker-compose.dev.yml up --build
 cd deploy && docker compose up -d
 ```
 
-## Specs et plans
+## Specs & Plans
 
-- Design spec : `docs/superpowers/specs/2026-03-25-garance-baas-design.md`
-- Plans d'implementation : `docs/superpowers/plans/2026-03-25-garance-*.md`
+- Design spec: `docs/superpowers/specs/2026-03-25-garance-baas-design.md`
+- Implementation plans: `docs/superpowers/plans/2026-03-25-garance-*.md`

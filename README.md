@@ -1,8 +1,8 @@
 # Garance
 
-**BaaS souverain open source** — Alternative europenne a Supabase.
+**Open source Backend-as-a-Service** — A sovereign alternative to Supabase, built in Europe.
 
-Garance fournit une base de donnees PostgreSQL avec API REST auto-generee, authentification, stockage de fichiers, et un dashboard d'administration. Heberge en France, conforme RGPD.
+Garance provides a managed PostgreSQL database with auto-generated REST API, authentication, file storage, and an admin dashboard. GDPR-compliant by design, open source by conviction.
 
 ## Architecture
 
@@ -25,15 +25,15 @@ Client (SDK / Dashboard)
   └─────────┘ └───────┘
 ```
 
-| Service | Langage | Role |
-|---------|---------|------|
-| Engine | Rust | Introspection PG, API REST auto-generee, query builder, codegen types |
+| Service | Language | Role |
+|---------|----------|------|
+| Engine | Rust | PG introspection, auto-generated REST API, query builder, type codegen |
 | Auth | Go | Signup/signin, JWT, sessions, argon2id |
-| Storage | Go | Upload/download S3, buckets, signed URLs |
+| Storage | Go | S3 upload/download, buckets, signed URLs |
 | Gateway | Go | HTTP → gRPC proxy, CORS, JWT, routing |
 | CLI | Go | `garance init`, `garance dev`, `garance db migrate` |
-| Schema | TypeScript | DSL declaratif (`garance.schema.ts` → JSON) |
-| SDK | TypeScript | Client SDK (`createClient()` avec auth, data, storage) |
+| Schema | TypeScript | Declarative DSL (`garance.schema.ts` → JSON) |
+| SDK | TypeScript | Client SDK (`createClient()` with auth, data, storage) |
 | Dashboard | Next.js | Admin UI (table editor, SQL editor, users, storage, settings) |
 
 ## Quick Start
@@ -43,37 +43,37 @@ Client (SDK / Dashboard)
 ```bash
 cd deploy
 cp .env.example .env
-# Editez .env (DB_PASSWORD, JWT_SECRET, S3_SECRET_KEY)
+# Edit .env (DB_PASSWORD, JWT_SECRET, S3_SECRET_KEY)
 docker compose up -d
 ```
 
-Services disponibles :
-- **API Gateway** : http://localhost:8080
-- **Dashboard** : http://localhost:3000
+Available services:
+- **API Gateway**: http://localhost:8080
+- **Dashboard**: http://localhost:3000
 
-### Developpement local (CLI)
+### Local Development (CLI)
 
 ```bash
-# Installer la CLI
+# Install the CLI
 brew install garancehq/tap/garance
 
-# Initialiser un projet
-garance init mon-projet
-cd mon-projet
+# Initialize a project
+garance init my-project
+cd my-project
 
-# Lancer l'environnement
+# Start the dev environment
 garance dev
 
-# Gerer la base de donnees
+# Manage the database
 garance db migrate
 garance db seed
 garance db reset
 
-# Generer les types
+# Generate client types
 garance gen types --lang ts
 ```
 
-### SDK TypeScript
+### TypeScript SDK
 
 ```typescript
 import { createClient } from '@garance/sdk'
@@ -81,8 +81,8 @@ import { createClient } from '@garance/sdk'
 const garance = createClient({ url: 'http://localhost:8080' })
 
 // Auth
-await garance.auth.signUp({ email: 'dev@example.fr', password: 'motdepasse' })
-await garance.auth.signIn({ email: 'dev@example.fr', password: 'motdepasse' })
+await garance.auth.signUp({ email: 'dev@example.com', password: 'password' })
+await garance.auth.signIn({ email: 'dev@example.com', password: 'password' })
 
 // Data
 const { data } = await garance.from('users').eq('name', 'Alice').limit(10).execute()
@@ -92,7 +92,7 @@ await garance.storage.from('avatars').upload('photo.jpg', file)
 const url = garance.storage.from('avatars').getPublicUrl('photo.jpg')
 ```
 
-### Schema declaratif
+### Declarative Schema
 
 ```typescript
 // garance.schema.ts
@@ -118,7 +118,7 @@ export default defineSchema({
 })
 ```
 
-## Structure du repo
+## Repository Structure
 
 ```
 garance/
@@ -137,16 +137,16 @@ garance/
 └── deploy/           # Docker Compose (prod + dev)
 ```
 
-## Tests
+## Testing
 
 ```bash
 # Engine (Rust)
 cd engine && cargo test
 
-# Auth (Go) — necessite Docker
+# Auth (Go) — requires Docker
 cd services/auth && go test ./... -count=1
 
-# Storage (Go) — necessite Docker
+# Storage (Go) — requires Docker
 cd services/storage && go test ./... -count=1
 
 # Schema (TypeScript)
@@ -158,20 +158,21 @@ cd sdks/typescript && npm test
 
 ## Tech Stack
 
-- **Rust** : Engine (axum, tonic, tokio-postgres, deadpool)
-- **Go** : Auth, Storage, Gateway, CLI (pgx, grpc, cobra, minio-go)
-- **TypeScript** : Schema DSL, SDK, Dashboard (Next.js, shadcn/ui)
-- **PostgreSQL 17** : Base de donnees
-- **MinIO** : Stockage S3-compatible
-- **gRPC** : Communication inter-services (protobuf)
+- **Rust**: Engine (axum, tonic, tokio-postgres, deadpool)
+- **Go**: Auth, Storage, Gateway, CLI (pgx, grpc, cobra, minio-go)
+- **TypeScript**: Schema DSL, SDK, Dashboard (Next.js, shadcn/ui)
+- **PostgreSQL 17**: Database
+- **MinIO**: S3-compatible object storage
+- **gRPC**: Inter-service communication (protobuf)
 
-## Souverainete
+## Why Garance
 
-- Hebergement cible : Scaleway (Paris)
-- Aucune dependance a des services US dans le chemin critique
-- RGPD natif (suppression de compte, export des donnees, audit trail)
-- Open source (Apache 2.0)
+- **Open source** (Apache 2.0) — self-host anywhere, audit everything
+- **GDPR-native** — account deletion, data export, audit trail built in
+- **Declarative schema** — define your database in TypeScript, not raw SQL
+- **Polyglot architecture** — each service in the best language for the job
+- **European infrastructure** — default hosting on Scaleway (Paris), no US dependency in the critical path
 
-## Licence
+## License
 
 [Apache License 2.0](LICENSE)
