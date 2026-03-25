@@ -5,20 +5,47 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/data-table'
+import { RefreshCw } from 'lucide-react'
 import { GATEWAY_URL } from '@/lib/garance'
 
+interface TableInfo {
+  name: string
+  columns: number
+  primary_key: string[] | null
+  row_count: number | null
+}
+
 export default function TablesPage() {
-  const [tables, setTables] = useState<string[]>([])
+  const [tables, setTables] = useState<TableInfo[]>([])
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [columns, setColumns] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
+  const fetchTables = async () => {
+    try {
+      const res = await fetch(`${GATEWAY_URL}/api/v1/_tables`)
+      if (res.ok) {
+        const data = await res.json()
+        setTables(data)
+      }
+    } catch {
+      setTables([])
+    }
+  }
+
   useEffect(() => {
-    // In MVP, tables are discovered by trying known table names
-    // A proper /api/v1/_tables endpoint would be better
-    setTables(['users', 'posts'])
+    fetchTables()
   }, [])
+
+  const reloadSchema = async () => {
+    try {
+      await fetch(`${GATEWAY_URL}/api/v1/_reload`, { method: 'POST' })
+      await fetchTables()
+    } catch {
+      // ignore
+    }
+  }
 
   const loadTable = async (table: string) => {
     setSelectedTable(table)
@@ -42,20 +69,30 @@ export default function TablesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-zinc-100">Table Editor</h2>
-        <p className="text-sm text-zinc-500 mt-1">Browse and edit your data</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-zinc-100">Table Editor</h2>
+          <p className="text-sm text-zinc-500 mt-1">Browse and edit your data</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={reloadSchema}>
+          <RefreshCw className="h-3 w-3 mr-2" /> Refresh
+        </Button>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {tables.map((t) => (
           <Button
-            key={t}
-            variant={selectedTable === t ? 'default' : 'outline'}
+            key={t.name}
+            variant={selectedTable === t.name ? 'default' : 'outline'}
             size="sm"
-            onClick={() => loadTable(t)}
+            onClick={() => loadTable(t.name)}
           >
-            {t}
+            {t.name}
+            {t.row_count !== null && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {t.row_count}
+              </Badge>
+            )}
           </Button>
         ))}
       </div>

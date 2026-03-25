@@ -13,42 +13,43 @@ export default function SQLEditorPage() {
   const [query, setQuery] = useState('SELECT * FROM users LIMIT 10;')
   const [results, setResults] = useState<Record<string, unknown>[]>([])
   const [columns, setColumns] = useState<string[]>([])
+  const [rowCount, setRowCount] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [duration, setDuration] = useState<number | null>(null)
+  const [writeMode, setWriteMode] = useState(false)
 
   const executeQuery = async () => {
     setLoading(true)
     setError(null)
-    const start = Date.now()
+    setRowCount(null)
 
     try {
       const res = await fetch(`${GATEWAY_URL}/api/v1/rpc/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(writeMode && { 'X-Garance-SQL-Mode': 'readwrite' }),
+        },
         body: JSON.stringify({ sql: query }),
       })
 
-      setDuration(Date.now() - start)
-
       if (res.ok) {
         const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          setResults(data)
-          setColumns(Object.keys(data[0]))
-        } else {
-          setResults([])
-          setColumns([])
-        }
+        setResults(data.rows || [])
+        setColumns(data.columns || [])
+        setRowCount(data.row_count ?? null)
+        setDuration(data.duration_ms ?? null)
       } else {
         const err = await res.json()
         setError(err.error?.message || 'Query failed')
         setResults([])
         setColumns([])
+        setDuration(null)
       }
     } catch (err) {
       setError(String(err))
-      setDuration(Date.now() - start)
+      setDuration(null)
     } finally {
       setLoading(false)
     }
@@ -78,6 +79,15 @@ export default function SQLEditorPage() {
             <Play className="h-3 w-3 mr-2" />
             {loading ? 'Executing...' : 'Run'}
           </Button>
+          <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={writeMode}
+              onChange={(e) => setWriteMode(e.target.checked)}
+              className="rounded border-zinc-700 bg-zinc-900"
+            />
+            Write mode
+          </label>
           <span className="text-xs text-zinc-500">Ctrl+Enter to execute</span>
           {duration !== null && (
             <Badge variant="secondary" className="text-xs">{duration}ms</Badge>
@@ -96,7 +106,10 @@ export default function SQLEditorPage() {
       {results.length > 0 && (
         <Card className="flex-1 border-zinc-800 bg-zinc-900 overflow-auto">
           <CardHeader className="py-3">
-            <CardTitle className="text-sm text-zinc-400">{results.length} rows</CardTitle>
+            <CardTitle className="text-sm text-zinc-400">
+              {rowCount !== null ? rowCount : results.length} rows
+              {duration !== null && <> &mdash; {duration}ms</>}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <DataTable columns={columns} rows={results} />
