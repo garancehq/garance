@@ -1247,7 +1247,7 @@ pub fn build_select(table: &Table, qp: &QueryParams) -> Result<SqlQuery, QueryEr
                         param_idx += 1;
                         p
                     }).collect();
-                    conditions.push(format!("\"{}\" IN ({})", filter.column, placeholders.join(", ")));
+                    conditions.push(format!("\"{}\"::text IN ({})", filter.column, placeholders.join(", ")));
                 }
                 _ => {
                     // Cast column to text for comparison — allows string params to match any PG type
@@ -1978,11 +1978,11 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
 
     let pool = GarancePool::new(&config).unwrap();
 
-    // Create test table
+    // Create test table — use uuid PK to match typical Garance schema
     let client = pool.get().await.unwrap();
     client.execute(
         "CREATE TABLE users (
-            id serial PRIMARY KEY,
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             name text NOT NULL,
             email text UNIQUE NOT NULL
         )", &[]
