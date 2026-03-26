@@ -1,0 +1,37 @@
+name: Test Engine (Rust)
+
+on:
+  push:
+    branches: [main]
+    paths: ['engine/**', 'proto/engine/**']
+  pull_request:
+    paths: ['engine/**', 'proto/engine/**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Run tests
+        working-directory: engine
+        run: cargo test --all
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres

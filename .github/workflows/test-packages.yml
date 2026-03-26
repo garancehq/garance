@@ -1,0 +1,44 @@
+name: Test Packages (TypeScript)
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/**', 'sdks/**', 'dashboard/**']
+  pull_request:
+    paths: ['packages/**', 'sdks/**', 'dashboard/**']
+
+jobs:
+  test-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test
+        working-directory: packages/schema
+        run: npm ci && npm test
+
+  test-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test
+        working-directory: sdks/typescript
+        run: npm ci && npm test
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and build
+        working-directory: dashboard
+        run: npm ci && npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1

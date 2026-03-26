@@ -1,0 +1,57 @@
+name: Test Services (Go)
+
+on:
+  push:
+    branches: [main]
+    paths: ['services/**', 'proto/**', 'cli/**']
+  pull_request:
+    paths: ['services/**', 'proto/**', 'cli/**']
+
+jobs:
+  test-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/auth/go.sum
+      - name: Run auth tests
+        working-directory: services/auth
+        run: go test ./... -count=1 -timeout 120s
+
+  test-storage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/storage/go.sum
+      - name: Run storage tests
+        working-directory: services/storage
+        run: go test ./... -count=1 -timeout 120s
+
+  test-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: cli/go.sum
+      - name: Run CLI tests
+        working-directory: cli
+        run: go test ./... -count=1
+
+  build-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/gateway/go.sum
+      - name: Build gateway
+        working-directory: services/gateway
+        run: go build ./...
