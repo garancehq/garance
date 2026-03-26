@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -27,15 +28,23 @@ func (db *DB) Close() {
 	db.Pool.Close()
 }
 
-// RunMigrationsFromDir reads and applies SQL migrations from the given directory.
+// RunMigrationsFromDir reads and applies all .sql migrations from the given directory in lexicographic order.
 func (db *DB) RunMigrationsFromDir(ctx context.Context, dir string) error {
-	sql, err := os.ReadFile(dir + "/001_initial.sql")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("failed to read migration file: %w", err)
+		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
-	_, err = db.Pool.Exec(ctx, string(sql))
-	if err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		sql, err := os.ReadFile(dir + "/" + entry.Name())
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", entry.Name(), err)
+		}
+		if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
+			return fmt.Errorf("failed to apply %s: %w", entry.Name(), err)
+		}
 	}
 	return nil
 }

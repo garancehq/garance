@@ -46,3 +46,11 @@ func (db *DB) GetIdentityByProvider(ctx context.Context, provider, providerUserI
 	}
 	return &identity, err
 }
+
+func (db *DB) UpdateIdentityProviderData(ctx context.Context, provider, providerUserID string, providerData []byte) error {
+	_, err := db.Pool.Exec(ctx,
+		`UPDATE garance_auth.identities SET provider_data = $1, updated_at = now()
+		 WHERE provider = $2 AND provider_user_id = $3`,
+		providerData, provider, providerUserID)
+	return err
+}

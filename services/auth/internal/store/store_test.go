@@ -195,3 +195,76 @@ func TestIdentity(t *testing.T) {
 		t.Errorf("expected ErrIdentityNotFound, got %v", err)
 	}
 }
+
+func TestProviderCRUD(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	p, err := db.CreateProvider(ctx, "google", "client-123", "encrypted-secret", "email,profile")
+	if err != nil {
+		t.Fatalf("CreateProvider: %v", err)
+	}
+	if p.Provider != "google" {
+		t.Errorf("expected google, got %s", p.Provider)
+	}
+
+	found, err := db.GetProvider(ctx, "google")
+	if err != nil {
+		t.Fatalf("GetProvider: %v", err)
+	}
+	if found.ClientID != "client-123" {
+		t.Error("client_id mismatch")
+	}
+
+	providers, err := db.ListProviders(ctx)
+	if err != nil {
+		t.Fatalf("ListProviders: %v", err)
+	}
+	if len(providers) != 1 {
+		t.Errorf("expected 1 provider, got %d", len(providers))
+	}
+
+	err = db.DeleteProvider(ctx, "google")
+	if err != nil {
+		t.Fatalf("DeleteProvider: %v", err)
+	}
+	_, err = db.GetProvider(ctx, "google")
+	if err != store.ErrProviderNotFound {
+		t.Errorf("expected ErrProviderNotFound, got %v", err)
+	}
+}
+
+func TestDuplicateProvider(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	db.CreateProvider(ctx, "github", "id1", "secret1", "user:email")
+	_, err := db.CreateProvider(ctx, "github", "id2", "secret2", "user:email")
+	if err != store.ErrProviderAlreadyExists {
+		t.Errorf("expected ErrProviderAlreadyExists, got %v", err)
+	}
+}
+
+func TestOAuthState(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	err := db.CreateOAuthState(ctx, "random-state-123", "google", "http://localhost:3000/callback")
+	if err != nil {
+		t.Fatalf("CreateOAuthState: %v", err)
+	}
+
+	state, err := db.GetAndConsumeOAuthState(ctx, "random-state-123")
+	if err != nil {
+		t.Fatalf("GetAndConsumeOAuthState: %v", err)
+	}
+	if state.Provider != "google" {
+		t.Errorf("expected google, got %s", state.Provider)
+	}
+
+	// Consumed — second call should fail
+	_, err = db.GetAndConsumeOAuthState(ctx, "random-state-123")
+	if err != store.ErrOAuthStateNotFound {
+		t.Errorf("expected ErrOAuthStateNotFound, got %v", err)
+	}
+}
