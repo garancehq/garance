@@ -3,9 +3,10 @@ defmodule RealtimeWeb.ChangesChannel do
   require Logger
 
   @impl true
-  def join("realtime:" <> table, _params, socket) do
+  def join("realtime:" <> table, params, socket) do
+    user_id = Map.get(params, "user_id", nil)
     Logger.info("Client joined realtime:#{table}")
-    {:ok, assign(socket, :table, table)}
+    {:ok, assign(socket, table: table, user_id: user_id)}
   end
 
   @impl true
@@ -16,7 +17,7 @@ defmodule RealtimeWeb.ChangesChannel do
     filters = Realtime.Filter.parse_filter(filter_string)
     ref = Map.get(payload, "ref", nil)
 
-    Realtime.SubscriptionRegistry.subscribe(self(), table, events, filters)
+    Realtime.SubscriptionRegistry.subscribe(self(), table, events, filters, socket.assigns.user_id)
 
     push(socket, "subscribed", %{"ref" => ref, "table" => table})
     {:noreply, socket}
