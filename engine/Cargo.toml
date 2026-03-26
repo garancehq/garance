@@ -27,3 +27,4 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 axum = "0.8"
 tonic = "0.12"
 prost = "0.13"
+sha2 = "0.10"
