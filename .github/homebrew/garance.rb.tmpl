@@ -1,0 +1,35 @@
+class Garance < Formula
+  desc "The open source Backend-as-a-Service CLI"
+  homepage "https://garance.io"
+  version "VERSION"
+  license "Apache-2.0"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/garancehq/garance/releases/download/vVERSION/garance-darwin-arm64"
+      sha256 "SHA256_DARWIN_ARM64"
+    else
+      url "https://github.com/garancehq/garance/releases/download/vVERSION/garance-darwin-amd64"
+      sha256 "SHA256_DARWIN_AMD64"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/garancehq/garance/releases/download/vVERSION/garance-linux-arm64"
+      sha256 "SHA256_LINUX_ARM64"
+    else
+      url "https://github.com/garancehq/garance/releases/download/vVERSION/garance-linux-amd64"
+      sha256 "SHA256_LINUX_AMD64"
+    end
+  end
+
+  def install
+    binary_name = "garance-#{OS.kernel_name.downcase}-#{Hardware::CPU.arch == :arm64 ? "arm64" : "amd64"}"
+    bin.install binary_name => "garance"
+  end
+
+  test do
+    assert_match "garance", shell_output("#{bin}/garance version")
+  end
+end
