@@ -38,9 +38,12 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
+	realtimeProxy := proxy.NewRealtimeProxy()
+
 	engineProxy.RegisterRoutes(mux)
 	authProxy.RegisterRoutes(mux)
 	storageProxy.RegisterRoutes(mux)
+	realtimeProxy.RegisterRoutes(mux)
 
 	// Middleware chain: Logging -> CORS -> JWT extraction -> routes
 	var handler http.Handler = mux
@@ -59,7 +62,7 @@ func main() {
 	}()
 
 	log.Printf("garance gateway listening on %s", cfg.ListenAddr)
-	log.Printf("  engine: %s | auth: %s | storage: %s", cfg.EngineGRPCAddr, cfg.AuthGRPCAddr, cfg.StorageGRPCAddr)
+	log.Printf("  engine: %s | auth: %s | storage: %s | realtime: ws", cfg.EngineGRPCAddr, cfg.AuthGRPCAddr, cfg.StorageGRPCAddr)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

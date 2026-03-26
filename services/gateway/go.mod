@@ -14,6 +14,7 @@ require (
 	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	nhooyr.io/websocket v1.8.17 // indirect
 )
 
 replace github.com/garancehq/garance/proto => ../../proto
