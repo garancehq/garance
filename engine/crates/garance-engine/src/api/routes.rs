@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value, Map};
+use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 
 use super::error::ApiError;
@@ -282,6 +283,132 @@ pub async fn delete_row(
     if affected == 0 { return Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } }); }
     Ok(StatusCode::NO_CONTENT)
 }
+
+// ─── Migrate endpoints ────────────────────────────────────────────────────────
+
+/// POST /api/v1/_migrate/preview — diff desired schema vs PG, return SQL
+pub async fn migrate_preview(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, ApiError> {
+    let desired: crate::schema::json_schema::GaranceSchema = serde_json::from_value(
+        body.get("schema").cloned().unwrap_or(body.clone())
+    ).map_err(|e| ApiError {
+        error: super::error::ApiErrorBody {
+            code: "VALIDATION_ERROR".into(), message: format!("invalid schema JSON: {}", e), status: 400, details: None,
+        },
+    })?;
+
+    // Introspect current PG state
+    let client = state.pool.get().await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+    let current = crate::schema::introspect(&client, "public").await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+
+    let diff_result = crate::diff::diff(&desired, &current);
+
+    Ok(Json(json!({
+        "statements": diff_result.statements,
+        "summary": diff_result.summary,
+        "has_destructive": diff_result.has_destructive,
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct MigrateApplyRequest {
+    sql: String,
+    filename: String,
+}
+
+/// POST /api/v1/_migrate/apply — execute migration SQL, record in tracking table
+pub async fn migrate_apply(
+    State(state): State<AppState>,
+    Json(body): Json<MigrateApplyRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let mut client = state.pool.get().await.map_err(|e| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    })?;
+
+    let pg_err = |e: tokio_postgres::Error| ApiError {
+        error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+    };
+
+    // Ensure tracking table exists
+    client.execute(
+        "CREATE SCHEMA IF NOT EXISTS garance_platform", &[]
+    ).await.map_err(&pg_err)?;
+    client.execute(
+        "CREATE TABLE IF NOT EXISTS garance_platform.migrations (
+            id SERIAL PRIMARY KEY,
+            filename TEXT UNIQUE NOT NULL,
+            checksum TEXT NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )", &[]
+    ).await.map_err(&pg_err)?;
+
+    // Check if already applied
+    let existing = client.query_opt(
+        "SELECT filename FROM garance_platform.migrations WHERE filename = $1",
+        &[&body.filename],
+    ).await.map_err(&pg_err)?;
+
+    if existing.is_some() {
+        return Err(ApiError {
+            error: super::error::ApiErrorBody {
+                code: "CONFLICT".into(), message: format!("migration '{}' already applied", body.filename), status: 409, details: None,
+            },
+        });
+    }
+
+    // Compute checksum
+    let mut hasher = Sha256::new();
+    hasher.update(body.sql.as_bytes());
+    let checksum = format!("{:x}", hasher.finalize());
+
+    // Execute in transaction (use tokio-postgres Transaction API, not manual BEGIN)
+    let tx = client.build_transaction().start().await.map_err(&pg_err)?;
+
+    match tx.batch_execute(&body.sql).await {
+        Ok(_) => {
+            // Record in tracking
+            tx.execute(
+                "INSERT INTO garance_platform.migrations (filename, checksum) VALUES ($1, $2)",
+                &[&body.filename, &checksum],
+            ).await.map_err(&pg_err)?;
+
+            tx.commit().await.map_err(&pg_err)?;
+
+            // Reload schema (need a fresh connection since tx consumed the previous one)
+            let reload_client = state.pool.get().await.map_err(|e| ApiError {
+                error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+            })?;
+            let new_schema = crate::schema::introspect(&reload_client, "public").await.map_err(|e| ApiError {
+                error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+            })?;
+            let table_count = new_schema.tables.len();
+            let mut schema = state.schema.write().await;
+            *schema = new_schema;
+
+            Ok((StatusCode::CREATED, Json(json!({
+                "applied": true,
+                "filename": body.filename,
+                "tables_after": table_count,
+            }))))
+        }
+        Err(e) => {
+            // Transaction is automatically rolled back when dropped
+            Err(ApiError {
+                error: super::error::ApiErrorBody {
+                    code: "VALIDATION_ERROR".into(), message: format!("migration failed: {}", e), status: 400, details: None,
+                },
+            })
+        }
+    }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 pub fn row_to_json(row: &tokio_postgres::Row) -> Value {
     use tokio_postgres::types::Type;

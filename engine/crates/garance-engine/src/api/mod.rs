@@ -16,6 +16,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/_schema", get(routes::get_schema))
         .route("/api/v1/_schema/{table}", get(routes::get_schema_table))
         .route("/api/v1/_reload", post(routes::reload_schema))
+        // Migrate endpoints
+        .route("/api/v1/_migrate/preview", post(routes::migrate_preview))
+        .route("/api/v1/_migrate/apply", post(routes::migrate_apply))
         // SQL execution
         .route("/api/v1/rpc/query", post(routes::execute_sql))
         // Health
