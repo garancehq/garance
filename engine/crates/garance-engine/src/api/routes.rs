@@ -99,6 +99,9 @@ pub async fn reload_schema(
     let mut schema = state.schema.write().await;
     *schema = new_schema;
 
+    // Re-attach triggers to any new tables
+    let _ = crate::schema::triggers::attach_triggers(&client, "public").await;
+
     Ok(Json(json!({
         "tables": table_count,
         "reloaded_at": chrono::Utc::now().to_rfc3339(),
@@ -390,6 +393,12 @@ pub async fn migrate_apply(
             let table_count = new_schema.tables.len();
             let mut schema = state.schema.write().await;
             *schema = new_schema;
+
+            // Attach triggers to newly created tables
+            let trigger_client = state.pool.get().await.map_err(|e| ApiError {
+                error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
+            })?;
+            let _ = crate::schema::triggers::attach_triggers(&trigger_client, "public").await;
 
             Ok((StatusCode::CREATED, Json(json!({
                 "applied": true,

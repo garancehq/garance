@@ -1,6 +1,7 @@
 pub mod types;
 pub mod introspect;
 pub mod json_schema;
+pub mod triggers;
 
 pub use types::*;
 pub use introspect::introspect;

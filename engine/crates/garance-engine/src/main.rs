@@ -22,6 +22,11 @@ async fn main() {
 
     let client = pool.get().await.expect("failed to connect to database");
     let db_schema = schema::introspect(&client, "public").await.expect("failed to introspect schema");
+
+    // Setup realtime triggers
+    schema::triggers::ensure_notify_function(&client).await.expect("failed to create notify function");
+    schema::triggers::attach_triggers(&client, "public").await.expect("failed to attach triggers");
+
     drop(client);
 
     info!(tables = db_schema.tables.len(), "schema introspected");
