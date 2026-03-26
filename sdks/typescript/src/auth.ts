@@ -24,8 +24,14 @@ export class AuthClient {
     return this.http.post('/auth/v1/magic-link', params)
   }
 
-  async signInWithOAuth(params: { provider: string }) {
-    return this.http.post('/auth/v1/oauth', params)
+  async signInWithOAuth(params: { provider: string; redirectUri?: string }) {
+    const redirectUri =
+      params.redirectUri || (typeof window !== 'undefined' ? window.location.href : '')
+    const url = `${this.http.getBaseUrl()}/auth/v1/oauth/${params.provider}?redirect_uri=${encodeURIComponent(redirectUri)}`
+    if (typeof window !== 'undefined') {
+      window.location.href = url
+    }
+    return { data: null, error: null }
   }
 
   async refreshToken(refreshToken: string) {

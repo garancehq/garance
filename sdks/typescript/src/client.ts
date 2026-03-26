@@ -18,6 +18,10 @@ export class HttpClient {
     return this.accessToken
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl
+  }
+
   private buildHeaders(extra?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = { ...this.headers, ...extra }
     if (this.accessToken) {
