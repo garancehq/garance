@@ -27,4 +27,4 @@ tonic-build = "0.12"
 [dev-dependencies]
 testcontainers = "0.23"
 testcontainers-modules = { version = "0.11", features = ["postgres"] }
-axum-test = "17"
+axum-test = "19"
