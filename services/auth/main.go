@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/garancehq/garance/services/auth/internal/config"
+	"github.com/garancehq/garance/services/auth/internal/crypto"
 	"github.com/garancehq/garance/services/auth/internal/grpcserver"
 	"github.com/garancehq/garance/services/auth/internal/handler"
 	"github.com/garancehq/garance/services/auth/internal/service"
@@ -35,7 +36,17 @@ func main() {
 
 	tokenMgr := token.NewManager(cfg.JWTSecret)
 	authService := service.NewAuthService(db, tokenMgr)
-	authHandler := handler.NewAuthHandler(authService, tokenMgr)
+
+	// Derive encryption key for OAuth client secrets
+	var encryptionKey []byte
+	if cfg.EncryptionKey != "" {
+		encryptionKey = crypto.DeriveKey(cfg.EncryptionKey)
+	} else {
+		log.Println("WARNING: ENCRYPTION_KEY not set, using default dev key — do NOT use in production")
+		encryptionKey = crypto.DeriveKey("garance-dev-encryption-key")
+	}
+
+	authHandler := handler.NewAuthHandler(authService, tokenMgr, encryptionKey, cfg.BaseURL)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

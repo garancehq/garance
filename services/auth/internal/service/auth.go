@@ -29,6 +29,11 @@ func NewAuthService(db *store.DB, tokens *token.Manager) *AuthService {
 	return &AuthService{db: db, tokens: tokens}
 }
 
+// DB returns the underlying store for admin operations.
+func (s *AuthService) DB() *store.DB {
+	return s.db
+}
+
 type AuthResult struct {
 	User      *store.User      `json:"user"`
 	TokenPair *token.TokenPair `json:"token_pair"`

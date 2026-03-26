@@ -2,7 +2,10 @@ package proxy
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,6 +34,10 @@ func (p *AuthProxy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /auth/v1/signout", p.SignOut)
 	mux.HandleFunc("GET /auth/v1/user", p.GetUser)
 	mux.HandleFunc("DELETE /auth/v1/user", p.DeleteUser)
+
+	// OAuth flow routes (HTTP pass-through — browser redirects)
+	mux.HandleFunc("GET /auth/v1/oauth/{provider}", p.OAuthInitiate)
+	mux.HandleFunc("GET /auth/v1/oauth/{provider}/callback", p.OAuthCallback)
 }
 
 func (p *AuthProxy) SignUp(w http.ResponseWriter, r *http.Request) {
@@ -147,4 +154,61 @@ func (p *AuthProxy) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+// ─── OAuth Flow (HTTP pass-through) ──────────────────────────────────────────
+
+func (p *AuthProxy) OAuthInitiate(w http.ResponseWriter, r *http.Request) {
+	provider := r.PathValue("provider")
+	path := fmt.Sprintf("/auth/v1/oauth/%s?%s", provider, r.URL.RawQuery)
+	proxyToAuthHTTP(w, r, "GET", path)
+}
+
+func (p *AuthProxy) OAuthCallback(w http.ResponseWriter, r *http.Request) {
+	provider := r.PathValue("provider")
+	path := fmt.Sprintf("/auth/v1/oauth/%s/callback?%s", provider, r.URL.RawQuery)
+	proxyToAuthHTTP(w, r, "GET", path)
+}
+
+func proxyToAuthHTTP(w http.ResponseWriter, r *http.Request, method, path string) {
+	authHTTPURL := os.Getenv("AUTH_HTTP_URL")
+	if authHTTPURL == "" {
+		authHTTPURL = "http://auth:4001"
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), method, authHTTPURL+path, nil)
+	if err != nil {
+		handler.WriteError(w, "PROXY_ERROR", "failed to create request", 500)
+		return
+	}
+
+	// Forward relevant headers
+	req.Header.Set("User-Agent", r.UserAgent())
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		req.Header.Set("X-Forwarded-For", fwd)
+	}
+
+	// Use a client that does NOT follow redirects — we want to return the 302 to the browser
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		handler.WriteError(w, "PROXY_ERROR", fmt.Sprintf("failed to reach Auth service: %v", err), 502)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for k, vals := range resp.Header {
+		for _, v := range vals {
+			w.Header().Add(k, v)
+		}
+	}
+
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
