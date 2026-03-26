@@ -13,9 +13,9 @@ interface ServiceStatus {
 
 const SERVICES: { name: string; url: string }[] = [
   { name: 'Gateway', url: `${GATEWAY_URL}/health` },
-  { name: 'Engine', url: 'http://localhost:4000/health' },
-  { name: 'Auth', url: 'http://localhost:4001/health' },
-  { name: 'Storage', url: 'http://localhost:4002/health' },
+  { name: 'Engine', url: `${GATEWAY_URL}/api/v1/_tables` },
+  { name: 'Auth', url: `${GATEWAY_URL}/auth/v1/signin` },
+  { name: 'Storage', url: `${GATEWAY_URL}/storage/v1/buckets` },
 ]
 
 export default function LogsPage() {
@@ -32,7 +32,8 @@ export default function LogsPage() {
             const timeout = setTimeout(() => controller.abort(), 3000)
             const res = await fetch(svc.url, { signal: controller.signal })
             clearTimeout(timeout)
-            const status: ServiceStatus['status'] = res.ok ? 'online' : 'offline'
+            // Any HTTP response (even 400/401) means the service is up
+            const status: ServiceStatus['status'] = res.status > 0 ? 'online' : 'offline'
             return { ...svc, status }
           } catch {
             const status: ServiceStatus['status'] = 'offline'
