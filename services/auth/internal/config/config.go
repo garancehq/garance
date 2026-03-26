@@ -3,15 +3,16 @@ package config
 import "os"
 
 type Config struct {
-	DatabaseURL string
-	ListenAddr  string
-	JWTSecret   string
-	SMTPHost    string
-	SMTPPort    string
-	SMTPUser    string
-	SMTPPass    string
-	SMTPFrom    string
-	BaseURL     string
+	DatabaseURL   string
+	ListenAddr    string
+	JWTSecret     string
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUser      string
+	SMTPPass      string
+	SMTPFrom      string
+	BaseURL       string
+	EncryptionKey string
 }
 
 func Load() *Config {
@@ -24,7 +25,8 @@ func Load() *Config {
 		SMTPUser:    getEnv("SMTP_USER", ""),
 		SMTPPass:    getEnv("SMTP_PASS", ""),
 		SMTPFrom:    getEnv("SMTP_FROM", "noreply@garance.io"),
-		BaseURL:     getEnv("BASE_URL", "http://localhost:4001"),
+		BaseURL:       getEnv("BASE_URL", "http://localhost:4001"),
+		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
 	}
 }
 
