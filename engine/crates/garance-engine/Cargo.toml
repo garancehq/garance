@@ -19,6 +19,7 @@ axum.workspace = true
 tonic.workspace = true
 prost.workspace = true
 sha2.workspace = true
+deadpool-postgres.workspace = true
 
 [build-dependencies]
 tonic-build = "0.12"

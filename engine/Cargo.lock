@@ -715,6 +715,7 @@ dependencies = [
  "axum 0.8.8",
  "axum-test",
  "chrono",
+ "deadpool-postgres",
  "garance-codegen",
  "garance-pooler",
  "prost",

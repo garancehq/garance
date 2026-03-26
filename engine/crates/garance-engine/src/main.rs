@@ -27,6 +27,9 @@ async fn main() {
     schema::triggers::ensure_notify_function(&client).await.expect("failed to create notify function");
     schema::triggers::attach_triggers(&client, "public").await.expect("failed to attach triggers");
 
+    // Ensure PG roles exist
+    schema::roles::ensure_roles(&client).await.expect("failed to create PG roles");
+
     drop(client);
 
     info!(tables = db_schema.tables.len(), "schema introspected");

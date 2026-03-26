@@ -18,8 +18,10 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
 
     let client = pool.get().await.unwrap();
     let _ = client.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto", &[]).await;
+    schema::roles::ensure_roles(&client).await.unwrap();
     client.execute("CREATE TABLE todos (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, done boolean DEFAULT false)", &[]).await.unwrap();
     client.execute("INSERT INTO todos (title) VALUES ('Task A'), ('Task B')", &[]).await.unwrap();
+    schema::roles::grant_table_permissions(&client, "todos").await.unwrap();
     drop(client);
 
     let client = pool.get().await.unwrap();

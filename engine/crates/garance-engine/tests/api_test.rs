@@ -9,6 +9,9 @@ use garance_engine::api;
 use garance_engine::schema;
 use garance_pooler::{GarancePool, PoolConfig};
 
+const USER_ID_HEADER: &str = "x-user-id";
+const TEST_USER: &str = "test-user";
+
 async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
     let container = Postgres::default().start().await.unwrap();
     let port = container.get_host_port_ipv4(5432).await.unwrap();
@@ -19,6 +22,10 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
     // Create test table — uuid PK. May need pgcrypto for gen_random_uuid() on older PG
     let client = pool.get().await.unwrap();
     let _ = client.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto", &[]).await;
+
+    // Ensure PG roles exist (required for SET LOCAL role in CRUD handlers)
+    schema::roles::ensure_roles(&client).await.unwrap();
+
     client.execute(
         "CREATE TABLE users (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,6 +33,9 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
             email text UNIQUE NOT NULL
         )", &[]
     ).await.unwrap();
+
+    // Grant permissions to roles on the new table
+    schema::roles::grant_table_permissions(&client, "users").await.unwrap();
     drop(client);
 
     let client = pool.get().await.unwrap();
@@ -58,7 +68,13 @@ async fn test_list_empty_table() {
 #[tokio::test]
 async fn test_insert_and_get() {
     let (_container, server) = setup().await;
-    let response = server.post("/api/v1/users").json(&json!({"name": "Alice", "email": "alice@example.fr"})).await;
+    let response = server.post("/api/v1/users")
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Alice", "email": "alice@example.fr"}))
+        .await;
     response.assert_status(axum::http::StatusCode::CREATED);
     let body: serde_json::Value = response.json();
     assert_eq!(body["name"], "Alice");
@@ -73,10 +89,22 @@ async fn test_insert_and_get() {
 #[tokio::test]
 async fn test_update() {
     let (_container, server) = setup().await;
-    let response = server.post("/api/v1/users").json(&json!({"name": "Bob", "email": "bob@example.fr"})).await;
+    let response = server.post("/api/v1/users")
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Bob", "email": "bob@example.fr"}))
+        .await;
     let body: serde_json::Value = response.json();
     let id = body["id"].as_str().unwrap();
-    let response = server.patch(&format!("/api/v1/users/{}", id)).json(&json!({"name": "Robert"})).await;
+    let response = server.patch(&format!("/api/v1/users/{}", id))
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Robert"}))
+        .await;
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
     assert_eq!(body["name"], "Robert");
@@ -85,10 +113,21 @@ async fn test_update() {
 #[tokio::test]
 async fn test_delete() {
     let (_container, server) = setup().await;
-    let response = server.post("/api/v1/users").json(&json!({"name": "Charlie", "email": "charlie@example.fr"})).await;
+    let response = server.post("/api/v1/users")
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Charlie", "email": "charlie@example.fr"}))
+        .await;
     let body: serde_json::Value = response.json();
     let id = body["id"].as_str().unwrap();
-    let response = server.delete(&format!("/api/v1/users/{}", id)).await;
+    let response = server.delete(&format!("/api/v1/users/{}", id))
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .await;
     response.assert_status(axum::http::StatusCode::NO_CONTENT);
     let response = server.get(&format!("/api/v1/users/{}", id)).await;
     response.assert_status(axum::http::StatusCode::NOT_FOUND);
@@ -106,8 +145,20 @@ async fn test_unknown_table_returns_404() {
 #[tokio::test]
 async fn test_filter_params() {
     let (_container, server) = setup().await;
-    server.post("/api/v1/users").json(&json!({"name": "Alice", "email": "a@x.fr"})).await;
-    server.post("/api/v1/users").json(&json!({"name": "Bob", "email": "b@x.fr"})).await;
+    server.post("/api/v1/users")
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Alice", "email": "a@x.fr"}))
+        .await;
+    server.post("/api/v1/users")
+        .add_header(
+            axum::http::HeaderName::from_static(USER_ID_HEADER),
+            axum::http::HeaderValue::from_static(TEST_USER),
+        )
+        .json(&json!({"name": "Bob", "email": "b@x.fr"}))
+        .await;
     let response = server.get("/api/v1/users?name=eq.Alice").await;
     response.assert_status_ok();
     let body: Vec<serde_json::Value> = response.json();

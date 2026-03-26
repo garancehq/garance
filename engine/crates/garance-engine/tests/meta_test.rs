@@ -18,6 +18,7 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
 
     let client = pool.get().await.unwrap();
     let _ = client.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto", &[]).await;
+    schema::roles::ensure_roles(&client).await.unwrap();
     client.execute(
         "CREATE TABLE users (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -27,6 +28,7 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer) {
         )", &[]
     ).await.unwrap();
     client.execute("INSERT INTO users (email, name) VALUES ('a@test.com', 'Alice')", &[]).await.unwrap();
+    schema::roles::grant_table_permissions(&client, "users").await.unwrap();
     drop(client);
 
     let client = pool.get().await.unwrap();

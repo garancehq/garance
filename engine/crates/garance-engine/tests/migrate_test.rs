@@ -17,6 +17,7 @@ async fn setup() -> (testcontainers::ContainerAsync<Postgres>, TestServer, Arc<G
     let pool = GarancePool::new(&config).unwrap();
 
     let client = pool.get().await.unwrap();
+    schema::roles::ensure_roles(&client).await.unwrap();
     let db_schema = schema::introspect(&client, "public").await.unwrap();
     drop(client);
 

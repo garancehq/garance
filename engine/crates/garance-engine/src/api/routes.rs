@@ -13,6 +13,58 @@ use super::state::AppState;
 use crate::query::filter::parse_query_params;
 use crate::query::builder::*;
 
+// ─── RLS helpers ──────────────────────────────────────────────────────────────
+
+/// Extract user_id from request headers (set by Gateway from JWT).
+fn get_user_id(headers: &HeaderMap) -> Option<String> {
+    headers.get("x-user-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
+
+/// Set RLS context for the current transaction.
+/// Opens a BEGIN, sets the role and request.user_id via SET LOCAL.
+/// The caller is responsible for COMMIT on success or ROLLBACK on error.
+async fn set_rls_context(
+    client: &deadpool_postgres::Client,
+    user_id: Option<&str>,
+) -> Result<(), tokio_postgres::Error> {
+    let role = if user_id.is_some() { "garance_authenticated" } else { "garance_anon" };
+    let uid = user_id.unwrap_or("");
+
+    client.execute("BEGIN", &[]).await?;
+    client.execute(&format!("SET LOCAL role TO '{}'", role), &[]).await?;
+    client.execute(
+        &format!("SET LOCAL request.user_id TO '{}'", uid.replace('\'', "''")),
+        &[],
+    ).await?;
+    Ok(())
+}
+
+/// Map PG errors — 42501 (insufficient_privilege) becomes 403 PERMISSION_DENIED.
+fn map_pg_error(e: tokio_postgres::Error) -> ApiError {
+    if let Some(db_err) = e.as_db_error() {
+        if db_err.code() == &tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE {
+            return ApiError {
+                error: super::error::ApiErrorBody {
+                    code: "PERMISSION_DENIED".into(),
+                    message: "you do not have permission to perform this action".into(),
+                    status: 403,
+                    details: None,
+                },
+            };
+        }
+    }
+    ApiError {
+        error: super::error::ApiErrorBody {
+            code: "INTERNAL_ERROR".into(),
+            message: format!("internal database error: {}", e),
+            status: 500,
+            details: None,
+        },
+    }
+}
+
 // ─── Meta endpoints ──────────────────────────────────────────────────────────
 
 /// GET /api/v1/_tables — list introspected tables with metadata
@@ -200,9 +252,11 @@ pub async fn execute_sql(
 
 pub async fn list_rows(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(table_name): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = get_user_id(&headers);
     let schema = state.schema.read().await;
     let table = schema.tables.get(&table_name)
         .ok_or_else(|| ApiError::from(crate::query::QueryError::UnknownTable(table_name.clone())))?;
@@ -210,34 +264,67 @@ pub async fn list_rows(
     let qp = parse_query_params(&param_vec)?;
     let sql_query = build_select(table, &qp)?;
     let client = state.pool.get().await.map_err(|e| ApiError { error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None } })?;
+
+    // Set RLS context
+    set_rls_context(&client, user_id.as_deref()).await.map_err(map_pg_error)?;
+
     let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = sql_query.params.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let rows = client.query(&sql_query.sql, &params_refs).await?;
-    let results: Vec<Value> = rows.iter().map(row_to_json).collect();
-    Ok(Json(results))
+    let result = client.query(&sql_query.sql, &params_refs).await;
+
+    match result {
+        Ok(rows) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            let results: Vec<Value> = rows.iter().map(row_to_json).collect();
+            Ok(Json(results))
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            Err(map_pg_error(e))
+        }
+    }
 }
 
 pub async fn get_row(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((table_name, id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = get_user_id(&headers);
     let schema = state.schema.read().await;
     let table = schema.tables.get(&table_name)
         .ok_or_else(|| ApiError::from(crate::query::QueryError::UnknownTable(table_name.clone())))?;
     let sql_query = build_select_by_id(table, &id)?;
     let client = state.pool.get().await.map_err(|e| ApiError { error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None } })?;
+
+    // Set RLS context
+    set_rls_context(&client, user_id.as_deref()).await.map_err(map_pg_error)?;
+
     let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = sql_query.params.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let row = client.query_opt(&sql_query.sql, &params_refs).await?;
-    match row {
-        Some(row) => Ok(Json(row_to_json(&row))),
-        None => Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } }),
+    let result = client.query_opt(&sql_query.sql, &params_refs).await;
+
+    match result {
+        Ok(Some(row)) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            Ok(Json(row_to_json(&row)))
+        }
+        Ok(None) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } })
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            Err(map_pg_error(e))
+        }
     }
 }
 
 pub async fn insert_row(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(table_name): Path<String>,
     Json(body): Json<Map<String, Value>>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = get_user_id(&headers);
     let schema = state.schema.read().await;
     let table = schema.tables.get(&table_name)
         .ok_or_else(|| ApiError::from(crate::query::QueryError::UnknownTable(table_name.clone())))?;
@@ -245,16 +332,32 @@ pub async fn insert_row(
     let values: Vec<String> = body.values().map(|v| match v { Value::String(s) => s.clone(), other => other.to_string() }).collect();
     let sql_query = build_insert(table, &columns)?;
     let client = state.pool.get().await.map_err(|e| ApiError { error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None } })?;
+
+    // Set RLS context
+    set_rls_context(&client, user_id.as_deref()).await.map_err(map_pg_error)?;
+
     let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = values.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let row = client.query_one(&sql_query.sql, &params_refs).await?;
-    Ok((StatusCode::CREATED, Json(row_to_json(&row))))
+    let result = client.query_one(&sql_query.sql, &params_refs).await;
+
+    match result {
+        Ok(row) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            Ok((StatusCode::CREATED, Json(row_to_json(&row))))
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            Err(map_pg_error(e))
+        }
+    }
 }
 
 pub async fn update_row(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((table_name, id)): Path<(String, String)>,
     Json(body): Json<Map<String, Value>>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = get_user_id(&headers);
     let schema = state.schema.read().await;
     let table = schema.tables.get(&table_name)
         .ok_or_else(|| ApiError::from(crate::query::QueryError::UnknownTable(table_name.clone())))?;
@@ -262,29 +365,62 @@ pub async fn update_row(
     let values: Vec<String> = body.values().map(|v| match v { Value::String(s) => s.clone(), other => other.to_string() }).collect();
     let sql_query = build_update(table, &id, &columns)?;
     let client = state.pool.get().await.map_err(|e| ApiError { error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None } })?;
+
+    // Set RLS context
+    set_rls_context(&client, user_id.as_deref()).await.map_err(map_pg_error)?;
+
     let mut all_params: Vec<String> = values;
     all_params.push(id.clone());
     let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = all_params.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let row = client.query_opt(&sql_query.sql, &params_refs).await?;
-    match row {
-        Some(row) => Ok(Json(row_to_json(&row))),
-        None => Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } }),
+    let result = client.query_opt(&sql_query.sql, &params_refs).await;
+
+    match result {
+        Ok(Some(row)) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            Ok(Json(row_to_json(&row)))
+        }
+        Ok(None) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } })
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            Err(map_pg_error(e))
+        }
     }
 }
 
 pub async fn delete_row(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((table_name, id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = get_user_id(&headers);
     let schema = state.schema.read().await;
     let table = schema.tables.get(&table_name)
         .ok_or_else(|| ApiError::from(crate::query::QueryError::UnknownTable(table_name.clone())))?;
     let sql_query = build_delete(table, &id)?;
     let client = state.pool.get().await.map_err(|e| ApiError { error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None } })?;
+
+    // Set RLS context
+    set_rls_context(&client, user_id.as_deref()).await.map_err(map_pg_error)?;
+
     let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = sql_query.params.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let affected = client.execute(&sql_query.sql, &params_refs).await?;
-    if affected == 0 { return Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } }); }
-    Ok(StatusCode::NO_CONTENT)
+    let result = client.execute(&sql_query.sql, &params_refs).await;
+
+    match result {
+        Ok(affected) => {
+            let _ = client.execute("COMMIT", &[]).await;
+            if affected == 0 {
+                return Err(ApiError { error: super::error::ApiErrorBody { code: "NOT_FOUND".into(), message: format!("{} with id '{}' not found", table_name, id), status: 404, details: None } });
+            }
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            Err(map_pg_error(e))
+        }
+    }
 }
 
 // ─── Migrate endpoints ────────────────────────────────────────────────────────

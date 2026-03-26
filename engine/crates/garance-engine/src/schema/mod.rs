@@ -3,6 +3,7 @@ pub mod introspect;
 pub mod json_schema;
 pub mod triggers;
 pub mod rls;
+pub mod roles;
 
 pub use types::*;
 pub use introspect::introspect;
