@@ -8,6 +8,7 @@ defmodule Realtime.Application do
     children = [
       {Phoenix.PubSub, name: Realtime.PubSub},
       {Realtime.PgListener, database_url: database_url},
+      Realtime.SubscriptionRegistry,
       RealtimeWeb.Endpoint
     ]
 
