@@ -201,11 +201,23 @@ pub async fn execute_sql(
         error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
     };
 
-    // Begin transaction with scoped search_path
+    // Begin transaction with scoped search_path + RLS context
+    let user_id = get_user_id(&headers);
+
     client.execute("BEGIN", &[]).await.map_err(&pg_err)?;
     client.execute("SET LOCAL search_path TO public", &[]).await.map_err(&pg_err)?;
+
+    // Apply RLS role context (readwrite mode skips role switching for admin DDL)
     if !readwrite {
+        let role = if user_id.is_some() { "garance_authenticated" } else { "garance_anon" };
+        client.execute(&format!("SET LOCAL role TO '{}'", role), &[]).await.map_err(&pg_err)?;
         client.execute("SET TRANSACTION READ ONLY", &[]).await.map_err(&pg_err)?;
+    }
+    if let Some(ref uid) = user_id {
+        client.execute(
+            &format!("SET LOCAL request.user_id TO '{}'", uid.replace('\'', "''")),
+            &[],
+        ).await.map_err(&pg_err)?;
     }
 
     // Execute and handle result
@@ -235,6 +247,20 @@ pub async fn execute_sql(
         Err(e) => {
             let _ = client.execute("ROLLBACK", &[]).await;
             let duration_ms = start.elapsed().as_millis() as u64;
+
+            // Check for permission denied (42501)
+            if let Some(db_err) = e.as_db_error() {
+                if db_err.code() == &tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE {
+                    return Err(ApiError {
+                        error: super::error::ApiErrorBody {
+                            code: "PERMISSION_DENIED".into(),
+                            message: "you do not have permission to perform this action".into(),
+                            status: 403,
+                            details: Some(json!({ "duration_ms": duration_ms })),
+                        },
+                    });
+                }
+            }
 
             Err(ApiError {
                 error: super::error::ApiErrorBody {

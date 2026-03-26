@@ -6,6 +6,22 @@ const BLOCKED_SCHEMAS: &[&str] = &[
     "information_schema.",
 ];
 
+const BLOCKED_COMMANDS: &[&str] = &[
+    "set role",
+    "set local role",
+    "reset role",
+    "set session",
+    "set local request.",
+    "grant ",
+    "revoke ",
+    "create role",
+    "alter role",
+    "drop role",
+    "create policy",
+    "alter policy",
+    "drop policy",
+];
+
 const MAX_SQL_SIZE: usize = 64 * 1024; // 64KB
 
 #[derive(Debug)]
@@ -14,6 +30,7 @@ pub enum SqlValidationError {
     TooLarge(usize),
     MultiStatement,
     BlockedSchema(String),
+    BlockedCommand(String),
 }
 
 impl std::fmt::Display for SqlValidationError {
@@ -23,6 +40,7 @@ impl std::fmt::Display for SqlValidationError {
             SqlValidationError::TooLarge(size) => write!(f, "SQL query exceeds maximum size ({}KB > 64KB)", size / 1024),
             SqlValidationError::MultiStatement => write!(f, "multi-statement SQL is not allowed (remove semicolons)"),
             SqlValidationError::BlockedSchema(schema) => write!(f, "references to internal schema '{}' are not allowed", schema),
+            SqlValidationError::BlockedCommand(cmd) => write!(f, "SQL command '{}' is not allowed", cmd),
         }
     }
 }
@@ -53,6 +71,13 @@ pub fn validate_sql(sql: &str) -> Result<(), SqlValidationError> {
         if lower.contains(schema) {
             let display_name = schema.trim_end_matches('.');
             return Err(SqlValidationError::BlockedSchema(display_name.to_string()));
+        }
+    }
+
+    // Blocked commands check (case-insensitive)
+    for cmd in BLOCKED_COMMANDS {
+        if lower.contains(cmd) {
+            return Err(SqlValidationError::BlockedCommand(cmd.to_string()));
         }
     }
 
@@ -108,5 +133,16 @@ mod tests {
     fn test_size_limit() {
         let huge = "SELECT ".to_string() + &"x".repeat(MAX_SQL_SIZE);
         assert!(matches!(validate_sql(&huge), Err(SqlValidationError::TooLarge(_))));
+    }
+
+    #[test]
+    fn test_blocked_set_role() {
+        assert!(matches!(validate_sql("SET ROLE garance_anon"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("RESET ROLE"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("GRANT SELECT ON users TO evil"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("CREATE ROLE hacker"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("DROP POLICY p ON users"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("ALTER POLICY p ON users"), Err(SqlValidationError::BlockedCommand(_))));
+        assert!(matches!(validate_sql("SET LOCAL request.user_id TO 'admin'"), Err(SqlValidationError::BlockedCommand(_))));
     }
 }
