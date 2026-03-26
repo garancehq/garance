@@ -22,7 +22,7 @@ sha2.workspace = true
 deadpool-postgres.workspace = true
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 
 [dev-dependencies]
 testcontainers = "0.23"
