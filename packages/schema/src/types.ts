@@ -18,6 +18,7 @@ export interface GaranceColumn {
   nullable: boolean
   default?: string
   references?: string
+  renamed_from?: string
 }
 
 export interface GaranceRelation {

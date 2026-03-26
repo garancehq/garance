@@ -7,6 +7,7 @@ class ColumnBuilder {
   private _nullable = true // nullable by default in PG
   private _default?: string
   private _references?: string
+  private _renamedFrom?: string
 
   constructor(type: string) {
     this._type = type
@@ -43,6 +44,11 @@ class ColumnBuilder {
     return this
   }
 
+  renamedFrom(oldName: string): this {
+    this._renamedFrom = oldName
+    return this
+  }
+
   /** @internal */
   _build(): GaranceColumn {
     return {
@@ -52,6 +58,7 @@ class ColumnBuilder {
       nullable: this._nullable,
       ...(this._default !== undefined && { default: this._default }),
       ...(this._references !== undefined && { references: this._references }),
+      ...(this._renamedFrom && { renamed_from: this._renamedFrom }),
     }
   }
 }

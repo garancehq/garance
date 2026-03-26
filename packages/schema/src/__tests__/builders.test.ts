@@ -30,6 +30,12 @@ describe('column builder', () => {
     const built = col._build()
     expect(built.references).toBe('users.id')
   })
+
+  it('supports renamedFrom hint', () => {
+    const col = column.text().notNull().renamedFrom('old_name')
+    const built = col._build()
+    expect(built.renamed_from).toBe('old_name')
+  })
 })
 
 describe('relation builder', () => {
