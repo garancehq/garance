@@ -23,6 +23,16 @@ func DefaultSeedTemplate() string {
 `
 }
 
+func DefaultPackageJSONTemplate() string {
+	return `{
+  "private": true,
+  "dependencies": {
+    "@garance/schema": "^0.1.0"
+  }
+}
+`
+}
+
 func DefaultEnvTemplate() string {
 	return `# Garance local development environment
 # These values are used by 'garance dev'

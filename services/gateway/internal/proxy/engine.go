@@ -1,10 +1,12 @@
 package proxy
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,6 +35,9 @@ func (p *EngineProxy) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/_schema/{table}", p.GetSchemaTable)
 	mux.HandleFunc("POST /api/v1/_reload", p.ReloadSchema)
 	mux.HandleFunc("POST /api/v1/rpc/query", p.ExecuteSQL)
+	// Migrate endpoints (pass-through to Engine HTTP)
+	mux.HandleFunc("POST /api/v1/_migrate/preview", p.MigratePreview)
+	mux.HandleFunc("POST /api/v1/_migrate/apply", p.MigrateApply)
 	// CRUD
 	mux.HandleFunc("GET /api/v1/{table}", p.ListRows)
 	mux.HandleFunc("POST /api/v1/{table}", p.InsertRow)
@@ -266,4 +271,46 @@ func (p *EngineProxy) ExecuteSQL(w http.ResponseWriter, r *http.Request) {
 		"duration_ms": resp.DurationMs,
 	}
 	handler.WriteJSON(w, 200, result)
+}
+
+// ─── Migrate Endpoints (pass-through to Engine HTTP) ─────────────────────────
+
+func (p *EngineProxy) MigratePreview(w http.ResponseWriter, r *http.Request) {
+	proxyToEngineHTTP(w, r, "POST", "/api/v1/_migrate/preview")
+}
+
+func (p *EngineProxy) MigrateApply(w http.ResponseWriter, r *http.Request) {
+	proxyToEngineHTTP(w, r, "POST", "/api/v1/_migrate/apply")
+}
+
+func proxyToEngineHTTP(w http.ResponseWriter, r *http.Request, method, path string) {
+	engineHTTPURL := os.Getenv("ENGINE_HTTP_URL")
+	if engineHTTPURL == "" {
+		engineHTTPURL = "http://engine:4000"
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		handler.WriteError(w, "PROXY_ERROR", "failed to read request body", 500)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), method, engineHTTPURL+path, bytes.NewReader(body))
+	if err != nil {
+		handler.WriteError(w, "PROXY_ERROR", "failed to create request", 500)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		handler.WriteError(w, "PROXY_ERROR", fmt.Sprintf("failed to reach Engine: %v", err), 502)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
 }

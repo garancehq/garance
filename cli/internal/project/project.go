@@ -52,6 +52,14 @@ func Init(dir, name string) error {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
+	// Create package.json if it doesn't exist
+	packageJSONPath := filepath.Join(dir, "package.json")
+	if _, err := os.Stat(packageJSONPath); os.IsNotExist(err) {
+		if err := os.WriteFile(packageJSONPath, []byte(DefaultPackageJSONTemplate()), 0644); err != nil {
+			return fmt.Errorf("failed to write package.json: %w", err)
+		}
+	}
+
 	// Create .env.local
 	envContent := DefaultEnvTemplate()
 	if err := os.WriteFile(filepath.Join(dir, ".env.local"), []byte(envContent), 0644); err != nil {
