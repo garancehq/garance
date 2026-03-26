@@ -130,7 +130,8 @@ async fn introspect_foreign_keys(client: &Client, schema_name: &str, table_name:
         let ref_table: String = row.get::<_, &str>("referenced_table").to_string();
         let ref_col: String = row.get::<_, &str>("referenced_column").to_string();
 
-        let fk = fks_by_constraint.entry(constraint).or_insert_with(|| ForeignKey {
+        let fk = fks_by_constraint.entry(constraint.clone()).or_insert_with(|| ForeignKey {
+            constraint_name: constraint,
             columns: vec![],
             referenced_table: ref_table,
             referenced_columns: vec![],

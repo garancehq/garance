@@ -71,6 +71,7 @@ impl PgType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ForeignKey {
+    pub constraint_name: String,
     pub columns: Vec<String>,
     pub referenced_table: String,
     pub referenced_columns: Vec<String>,

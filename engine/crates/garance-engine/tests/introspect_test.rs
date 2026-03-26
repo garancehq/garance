@@ -74,6 +74,7 @@ async fn test_introspect_foreign_keys() {
     let posts = schema.tables.get("posts").unwrap();
 
     assert_eq!(posts.foreign_keys.len(), 1);
+    assert!(!posts.foreign_keys[0].constraint_name.is_empty());
     assert_eq!(posts.foreign_keys[0].referenced_table, "users");
     assert_eq!(posts.foreign_keys[0].columns, vec!["author_id"]);
     assert_eq!(posts.foreign_keys[0].referenced_columns, vec!["id"]);
