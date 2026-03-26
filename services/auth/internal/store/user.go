@@ -89,6 +89,35 @@ func (db *DB) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+func (db *DB) ListUsers(ctx context.Context, limit, offset int) ([]User, error) {
+	rows, err := db.Pool.Query(ctx,
+		`SELECT id, email, encrypted_password, email_verified, role, metadata, created_at, updated_at, banned_at
+		 FROM garance_auth.users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Email, &u.EncryptedPassword, &u.EmailVerified,
+			&u.Role, &u.Metadata, &u.CreatedAt, &u.UpdatedAt, &u.BannedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (db *DB) CountUsers(ctx context.Context) (int, error) {
+	var count int
+	err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM garance_auth.users`).Scan(&count)
+	return count, err
+}
+
 func isDuplicateKey(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

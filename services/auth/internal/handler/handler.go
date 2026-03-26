@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/garancehq/garance/services/auth/internal/crypto"
 	"github.com/garancehq/garance/services/auth/internal/service"
@@ -37,6 +38,7 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/v1/oauth/{provider}/callback", h.OAuthCallback)
 
 	// Admin routes (internal port, no auth required)
+	mux.HandleFunc("GET /auth/v1/admin/users", h.ListUsers)
 	mux.HandleFunc("GET /auth/v1/admin/providers", h.ListProviders)
 	mux.HandleFunc("POST /auth/v1/admin/providers", h.CreateProvider)
 	mux.HandleFunc("PATCH /auth/v1/admin/providers/{provider}", h.UpdateProvider)
@@ -175,6 +177,33 @@ func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil {
+			offset = parsed
+		}
+	}
+
+	users, err := h.auth.DB().ListUsers(r.Context(), limit, offset)
+	if err != nil {
+		writeError(w, "INTERNAL_ERROR", "failed to list users", 500)
+		return
+	}
+	count, _ := h.auth.DB().CountUsers(r.Context())
+
+	if users == nil {
+		users = []store.User{}
+	}
+	writeJSON(w, 200, map[string]interface{}{"users": users, "total": count})
 }
 
 func (h *AuthHandler) handleAuthError(w http.ResponseWriter, err error) {
