@@ -90,6 +90,18 @@ services:
       S3_BUCKET: garance
       JWT_SECRET: dev-secret-change-me
 
+  realtime:
+    build:
+      context: ../services/realtime
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/garance
+      PORT: "4003"
+      SECRET_KEY_BASE: dev-secret-key-base-at-least-64-characters-long-for-phoenix-to-accept-it-ok
+
   gateway:
     build:
       context: ..
@@ -100,6 +112,7 @@ services:
       - engine
       - auth
       - storage
+      - realtime
     environment:
       LISTEN_ADDR: 0.0.0.0:8080
       ENGINE_GRPC_ADDR: engine:5000
@@ -107,6 +120,7 @@ services:
       STORAGE_GRPC_ADDR: storage:5002
       JWT_SECRET: dev-secret-change-me
       ALLOWED_ORIGINS: "*"
+      REALTIME_WS_URL: ws://realtime:4003
 
   dashboard:
     build:

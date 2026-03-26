@@ -93,6 +93,19 @@ services:
     networks:
       - garance
 
+  realtime:
+    image: ghcr.io/garancehq/realtime:${GARANCE_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/${DB_NAME:-garance}
+      PORT: "4003"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    networks:
+      - garance
+
   gateway:
     image: ghcr.io/garancehq/gateway:${GARANCE_VERSION:-latest}
     restart: unless-stopped
@@ -102,6 +115,7 @@ services:
       - engine
       - auth
       - storage
+      - realtime
     environment:
       LISTEN_ADDR: 0.0.0.0:8080
       ENGINE_GRPC_ADDR: engine:5000
@@ -109,6 +123,7 @@ services:
       STORAGE_GRPC_ADDR: storage:5002
       JWT_SECRET: ${JWT_SECRET}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      REALTIME_WS_URL: ws://realtime:4003
     networks:
       - garance
 
