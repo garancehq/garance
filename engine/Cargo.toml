@@ -26,5 +26,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 axum = "0.8"
 tonic = "0.12"
-prost = "0.13"
+prost = "0.14"
 sha2 = "0.10"
