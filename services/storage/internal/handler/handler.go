@@ -39,6 +39,10 @@ func (h *StorageHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// List files
 	mux.HandleFunc("GET /storage/v1/{bucket}", h.requireAuth(h.ListFiles))
+
+	// Admin routes (internal port, no auth required)
+	mux.HandleFunc("GET /storage/v1/admin/buckets", h.ListBucketsAdmin)
+	mux.HandleFunc("GET /storage/v1/admin/buckets/{bucket}/files", h.ListFilesAdmin)
 }
 
 func (h *StorageHandler) requireAuth(handler http.HandlerFunc) http.HandlerFunc {
@@ -230,6 +234,52 @@ func (h *StorageHandler) CreateSignedURL(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *StorageHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
+	bucketName := r.PathValue("bucket")
+	prefix := r.URL.Query().Get("prefix")
+
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil {
+			offset = parsed
+		}
+	}
+
+	files, err := h.svc.ListFiles(r.Context(), bucketName, prefix, limit, offset)
+	if err != nil {
+		if errors.Is(err, store.ErrBucketNotFound) {
+			writeError(w, "NOT_FOUND", "bucket not found", 404)
+			return
+		}
+		writeError(w, "INTERNAL_ERROR", "failed to list files", 500)
+		return
+	}
+	if files == nil {
+		files = []store.File{}
+	}
+	writeJSON(w, 200, files)
+}
+
+// ─── Admin API (no auth required, internal port only) ────────────────────────
+
+func (h *StorageHandler) ListBucketsAdmin(w http.ResponseWriter, r *http.Request) {
+	buckets, err := h.svc.ListBuckets(r.Context())
+	if err != nil {
+		writeError(w, "INTERNAL_ERROR", "failed to list buckets", 500)
+		return
+	}
+	if buckets == nil {
+		buckets = []store.Bucket{}
+	}
+	writeJSON(w, 200, buckets)
+}
+
+func (h *StorageHandler) ListFilesAdmin(w http.ResponseWriter, r *http.Request) {
 	bucketName := r.PathValue("bucket")
 	prefix := r.URL.Query().Get("prefix")
 
