@@ -527,14 +527,21 @@ pub async fn migrate_apply(
                 error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
             })?;
             let table_count = new_schema.tables.len();
+            let table_names: Vec<String> = new_schema.tables.keys().cloned().collect();
             let mut schema = state.schema.write().await;
             *schema = new_schema;
+            drop(schema);
 
             // Attach triggers to newly created tables
             let trigger_client = state.pool.get().await.map_err(|e| ApiError {
                 error: super::error::ApiErrorBody { code: "INTERNAL_ERROR".into(), message: e.to_string(), status: 500, details: None },
             })?;
             let _ = crate::schema::triggers::attach_triggers(&trigger_client, "public").await;
+
+            // Grant permissions to roles on all tables
+            for table_name in &table_names {
+                let _ = crate::schema::roles::grant_table_permissions(&trigger_client, table_name).await;
+            }
 
             Ok((StatusCode::CREATED, Json(json!({
                 "applied": true,

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use crate::schema::json_schema::GaranceSchema;
 use crate::schema::types::Schema;
+use crate::schema::rls;
 use super::normalize::{normalize_type, normalize_default, pg_type_to_canonical};
 use super::sql_gen;
 
@@ -16,6 +17,9 @@ pub struct DiffSummary {
     pub indexes_dropped: usize,
     pub foreign_keys_added: usize,
     pub foreign_keys_dropped: usize,
+    pub rls_enabled: usize,
+    pub policies_created: usize,
+    pub policies_dropped: usize,
 }
 
 /// Result of a schema diff.
@@ -162,9 +166,43 @@ pub fn diff(desired: &GaranceSchema, current: &Schema) -> DiffResult {
         add_fks_from_relations(table_name, desired_table, &mut statements, &mut summary);
     }
 
+    // Phase 4: RLS — enable on new tables, regenerate policies where access rules exist
+    let new_tables: HashSet<&str> = desired_tables.difference(&current_tables).copied().collect();
+
+    for table_name in &desired_tables {
+        let desired_table = &desired.tables[*table_name];
+
+        // Enable RLS only on newly created tables
+        if new_tables.contains(table_name) {
+            statements.enable_rls.extend(rls::enable_rls(table_name));
+            summary.rls_enabled += 1;
+        }
+
+        // Generate policies for tables with access rules
+        if let Some(ref access) = desired_table.access {
+            // Drop existing garance policies first (idempotent)
+            let potential_policies = vec![
+                format!("garance_select_{}", table_name),
+                format!("garance_insert_{}", table_name),
+                format!("garance_update_{}", table_name),
+                format!("garance_delete_{}", table_name),
+            ];
+            statements.drop_policies.extend(rls::drop_policies(table_name, &potential_policies));
+            summary.policies_dropped += potential_policies.len();
+
+            // Create new policies
+            let policies = rls::generate_policies(table_name, access);
+            for (_name, sql) in &policies {
+                statements.create_policies.push(sql.clone());
+                summary.policies_created += 1;
+            }
+        }
+    }
+
     // Assemble in correct order
     let mut all_statements = vec![];
     all_statements.extend(statements.create_tables);
+    all_statements.extend(statements.enable_rls);
     all_statements.extend(statements.add_columns);
     all_statements.extend(statements.drop_not_null);
     all_statements.extend(statements.alter_types);
@@ -173,9 +211,11 @@ pub fn diff(desired: &GaranceSchema, current: &Schema) -> DiffResult {
     all_statements.extend(statements.set_not_null);
     all_statements.extend(statements.add_fks);
     all_statements.extend(statements.add_unique);
+    all_statements.extend(statements.create_policies);
     all_statements.extend(statements.create_indexes);
     all_statements.extend(statements.drop_indexes);
     all_statements.extend(statements.drop_unique);
+    all_statements.extend(statements.drop_policies);
     all_statements.extend(statements.drop_fks);
     all_statements.extend(statements.drop_columns);
     all_statements.extend(statements.drop_tables);
@@ -187,6 +227,7 @@ pub fn diff(desired: &GaranceSchema, current: &Schema) -> DiffResult {
 #[derive(Default)]
 struct DiffStatements {
     create_tables: Vec<String>,
+    enable_rls: Vec<String>,
     add_columns: Vec<String>,
     drop_not_null: Vec<String>,
     alter_types: Vec<String>,
@@ -195,9 +236,11 @@ struct DiffStatements {
     set_not_null: Vec<String>,
     add_fks: Vec<String>,
     add_unique: Vec<String>,
+    create_policies: Vec<String>,
     create_indexes: Vec<String>,
     drop_indexes: Vec<String>,
     drop_unique: Vec<String>,
+    drop_policies: Vec<String>,
     drop_fks: Vec<String>,
     drop_columns: Vec<String>,
     drop_tables: Vec<String>,
