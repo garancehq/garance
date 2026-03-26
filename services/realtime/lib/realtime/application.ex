@@ -9,6 +9,7 @@ defmodule Realtime.Application do
       {Phoenix.PubSub, name: Realtime.PubSub},
       {Realtime.PgListener, database_url: database_url},
       Realtime.SubscriptionRegistry,
+      Realtime.Dispatcher,
       RealtimeWeb.Endpoint
     ]
 
