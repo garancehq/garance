@@ -28,7 +28,7 @@ jobs:
       - name: Extract version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: engine/Dockerfile
@@ -54,7 +54,7 @@ jobs:
       - name: Extract version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: services/auth/Dockerfile
@@ -78,7 +78,7 @@ jobs:
       - name: Extract version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: services/storage/Dockerfile
@@ -102,7 +102,7 @@ jobs:
       - name: Extract version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: services/gateway/Dockerfile
@@ -126,7 +126,7 @@ jobs:
       - name: Extract version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: dashboard
           file: dashboard/Dockerfile
